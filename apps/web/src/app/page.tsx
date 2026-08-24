@@ -9,13 +9,14 @@ import {
 } from "@codexcap/core";
 import { refreshAllMarketsAction } from "@/app/actions/market";
 import { refreshAllGithubAction } from "@/app/actions/github";
-import { seedResearchAction } from "@/app/actions/seed";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { FilterBar } from "@/components/FilterBar";
+import { SeedResearchButton } from "@/components/SeedResearchButton";
 import { WhyWriteupButton } from "@/components/WhyWriteup";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function HomePage({
   searchParams,
@@ -54,14 +55,13 @@ export default async function HomePage({
           <h1 className="font-display text-2xl text-ink-100">Projects</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-400">
             Manual research database. Refresh GitHub for meaningful code; refresh markets for mcap.
+            {projects.length > 0 ? (
+              <span className="ml-1 text-ink-500">· {projects.length} loaded</span>
+            ) : null}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <form action={seedResearchAction}>
-            <button type="submit" className="btn">
-              Load research seed
-            </button>
-          </form>
+          <SeedResearchButton />
           <form action={refreshAllGithubAction}>
             <button type="submit" className="btn">
               Refresh GitHub
@@ -88,11 +88,17 @@ export default async function HomePage({
             Confirm <span className="font-mono text-ink-300">DATABASE_URL</span> is set in Vercel
             (plain name, not nested).
           </p>
-          <form action={seedResearchAction} className="mt-3">
-            <button type="submit" className="btn btn-primary">
-              Load research seed now
-            </button>
-          </form>
+          <div className="mt-3">
+            <SeedResearchButton label="Load research seed now" className="btn btn-primary" />
+          </div>
+        </div>
+      ) : null}
+
+      {projects.length > 0 && projects.length < 17 ? (
+        <div className="panel border-warn/40 p-3 text-sm text-ink-300">
+          Only <span className="text-ink-100">{projects.length}</span> projects loaded — full pack is
+          17. Click <span className="text-accent">Load research seed</span> again to add Mythos,
+          Hivra, Delu, HEIR, APINow, StarkBot, and the rest.
         </div>
       ) : null}
 
@@ -138,11 +144,9 @@ export default async function HomePage({
                     </Link>{" "}
                     or load the research pack.
                   </p>
-                  <form action={seedResearchAction} className="mt-3 inline-block">
-                    <button type="submit" className="btn btn-primary">
-                      Load research seed
-                    </button>
-                  </form>
+                  <div className="mt-3">
+                    <SeedResearchButton label="Load research seed" className="btn btn-primary" />
+                  </div>
                 </td>
               </tr>
             ) : (

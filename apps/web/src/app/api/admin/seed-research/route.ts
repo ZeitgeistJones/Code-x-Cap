@@ -1,25 +1,26 @@
 import { NextResponse } from "next/server";
 import { seedResearchProjects } from "@codexcap/db";
-import { getExpectedAdminKey } from "@/lib/auth";
+import { getExpectedAdminKey, isAuthenticated } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
  * POST /api/admin/seed-research
- * Header: x-admin-key: <ADMIN_KEY>
- * Idempotent — skips slugs that already exist.
+ * Auth: x-admin-key header/query OR unlocked admin cookie.
+ * Idempotent upsert of the full research pack (~17 projects).
  */
 export async function POST(request: Request) {
   const expected = getExpectedAdminKey();
-  if (!expected) {
-    return NextResponse.json({ error: "ADMIN_KEY not configured" }, { status: 500 });
-  }
   const provided =
     request.headers.get("x-admin-key") ??
     new URL(request.url).searchParams.get("key");
-  if (provided !== expected) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const cookieOk = await isAuthenticated();
+  const keyOk = Boolean(expected && provided === expected);
+  const openDev = !expected && process.env.NODE_ENV === "development";
+
+  if (!keyOk && !cookieOk && !openDev) {
+    return NextResponse.json({ error: "Unauthorized — unlock the site first" }, { status: 401 });
   }
 
   try {

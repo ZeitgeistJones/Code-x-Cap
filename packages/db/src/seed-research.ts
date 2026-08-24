@@ -1304,14 +1304,40 @@ export async function seedResearchProjects(connectionString?: string) {
 
   for (const t of EXTRA_TAGS) {
     const existing = await db.select().from(tags).where(eq(tags.slug, t.slug)).limit(1);
-    if (!existing[0]) await db.insert(tags).values(t);
+    if (!existing[0]) {
+      try {
+        await db.insert(tags).values(t);
+      } catch {
+        // race / already exists
+      }
+    }
   }
+
+  const created: string[] = [];
+  const updated: string[] = [];
+  const errors: Array<{ slug: string; error: string }> = [];
 
   for (const p of SEED) {
-    await upsertProject(db, p);
+    try {
+      const before = await db.select({ id: projects.id }).from(projects).where(eq(projects.slug, p.slug)).limit(1);
+      await upsertProject(db, p);
+      if (before[0]) updated.push(p.slug);
+      else created.push(p.slug);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error(`seed failed for ${p.slug}:`, message);
+      errors.push({ slug: p.slug, error: message });
+    }
   }
 
-  return { ok: true as const, count: SEED.length, slugs: SEED.map((p) => p.slug) };
+  return {
+    ok: errors.length === 0,
+    count: SEED.length,
+    created,
+    updated,
+    errors,
+    slugs: SEED.map((p) => p.slug),
+  };
 }
 
 const isCli = typeof process !== "undefined" && process.argv[1]?.includes("seed-research");
