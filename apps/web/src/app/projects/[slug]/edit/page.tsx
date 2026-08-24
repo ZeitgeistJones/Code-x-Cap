@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CHAINS, PRIMARY_CATEGORIES, PROJECT_STATUSES } from "@codexcap/core";
+import { CHAINS, DISCOVERY_TIERS, PRIMARY_CATEGORIES, PROJECT_STATUSES } from "@codexcap/core";
 import { updateProjectAction } from "@/app/actions/projects";
 import { getProjectBySlug, listAllTags } from "@/lib/queries";
 
@@ -39,7 +39,11 @@ export default async function EditProjectPage({
           </div>
           <div className="sm:col-span-2">
             <label className="label">Long description</label>
-            <textarea className="input min-h-[80px]" name="longDescription" defaultValue={project.longDescription ?? ""} />
+            <textarea
+              className="input min-h-[80px]"
+              name="longDescription"
+              defaultValue={project.longDescription ?? ""}
+            />
           </div>
           <div>
             <label className="label">Status</label>
@@ -50,6 +54,38 @@ export default async function EditProjectPage({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="label">Discovery tier</label>
+            <select
+              className="input"
+              name="discoveryTier"
+              defaultValue={project.discoveryTier ?? "under_the_radar"}
+            >
+              {DISCOVERY_TIERS.map((t) => (
+                <option key={t} value={t}>
+                  {t.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Why on this list</label>
+            <textarea
+              className="input min-h-[88px]"
+              name="trackingReason"
+              defaultValue={project.trackingReason ?? ""}
+              placeholder="Why this project is tracked…"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Research framing</label>
+            <textarea
+              className="input min-h-[72px]"
+              name="researchContext"
+              defaultValue={project.researchContext ?? ""}
+              placeholder="How to interpret this project (benchmark vs discovery, caveats)…"
+            />
           </div>
           <div>
             <label className="label">Category</label>
