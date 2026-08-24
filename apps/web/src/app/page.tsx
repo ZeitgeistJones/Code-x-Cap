@@ -182,7 +182,7 @@ export default async function HomePage({
                     )}
                   </td>
                   <td className="font-mono text-xs text-ink-200">
-                    {formatUsdCompact(p.market?.marketCap)}
+                    {formatUsdCompact(p.market?.marketCap ?? p.market?.fdv)}
                   </td>
                   <td className="font-mono text-xs text-ink-300">
                     {formatUsdCompact(p.market?.liquidityUsd)}

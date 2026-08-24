@@ -195,7 +195,10 @@ export default async function ProjectDetailPage({
       {/* Market summary */}
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {[
-          { label: "Market cap", value: formatUsdCompact(project.market?.marketCap) },
+          {
+            label: "Market cap",
+            value: formatUsdCompact(project.market?.marketCap ?? project.market?.fdv),
+          },
           { label: "FDV", value: formatUsdCompact(project.market?.fdv) },
           { label: "Liquidity", value: formatUsdCompact(project.market?.liquidityUsd) },
           { label: "Volume 24h", value: formatUsdCompact(project.market?.volume24h) },
