@@ -1,0 +1,9 @@
+{
+  "name": "@codexcap/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monitoring worker stub — wired in Phase 4",
+  "scripts": {
+    "start": "node -e \"console.log('Worker stub — Phase 4')\""
+  }
+}

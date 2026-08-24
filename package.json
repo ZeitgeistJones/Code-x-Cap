@@ -1,0 +1,21 @@
+{
+  "name": "code-x-cap",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CODE × CAP — builder-intelligence tracker for crypto projects",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @codexcap/web dev",
+    "build": "pnpm --filter @codexcap/web build",
+    "lint": "pnpm --filter @codexcap/web lint",
+    "db:generate": "pnpm --filter @codexcap/db generate",
+    "db:migrate": "pnpm --filter @codexcap/db migrate",
+    "db:seed": "pnpm --filter @codexcap/db seed",
+    "db:studio": "pnpm --filter @codexcap/db studio",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @codexcap/core test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
