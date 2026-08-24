@@ -62,15 +62,11 @@ Open http://localhost:3000 — unlock with your `ADMIN_KEY`.
 ## Setup (Vercel)
 
 1. Import this GitHub repo in Vercel.
-2. Set **Root Directory** to empty (repo root) or configure build:
-   - Install: `pnpm install`
-   - Build: `pnpm --filter @codexcap/web build`
-   - Output: `apps/web/.next` (or use `apps/web` as root if preferred)
-3. Add env vars in Vercel dashboard: `DATABASE_URL`, `ADMIN_KEY`.
-4. Run migrations once (Neon SQL editor with migration SQL, or local `DATABASE_URL` + `pnpm db:migrate`).
-5. Seed tags: `pnpm db:seed` against production `DATABASE_URL` once.
-
-Recommended: set Vercel project Root Directory to `apps/web` and ensure workspace packages resolve via pnpm from the monorepo root (`includeFiles` / install from root). The included `vercel.json` at repo root points at the web app.
+2. Set **Root Directory** to `apps/web` (Settings → General).
+3. Leave **Output Directory** blank (default `.next`). Do **not** set it to `apps/web/.next` — that doubles the path and breaks deploy.
+4. Install/build are already in `apps/web/vercel.json` (runs pnpm from the monorepo root).
+5. Add env vars: `DATABASE_URL`, `ADMIN_KEY`.
+6. Run migrations once in Neon SQL editor (`packages/db/drizzle/0000_phase0_init.sql`), then seed tags if you can run `pnpm db:seed` against that `DATABASE_URL`.
 
 ## Docs
 
