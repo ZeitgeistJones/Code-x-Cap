@@ -16,6 +16,7 @@ import { recencyBadge } from "@codexcap/core";
 import { db } from "@/lib/db";
 import { projectGithubStats } from "@/lib/github";
 import { latestSnapshotsByTokenIds } from "@/lib/market";
+import { ensureSchemaReady } from "@/lib/schema-ready";
 
 export type ProjectFilters = {
   q?: string;
@@ -32,6 +33,7 @@ export type ProjectFilters = {
 };
 
 export async function listProjects(filters: ProjectFilters = {}) {
+  await ensureSchemaReady();
   const database = db();
 
   const watchRows = filters.watchlist
@@ -163,6 +165,7 @@ export async function listProjects(filters: ProjectFilters = {}) {
 }
 
 export async function getProjectBySlug(slug: string) {
+  await ensureSchemaReady();
   const database = db();
   const [project] = await database.select().from(projects).where(eq(projects.slug, slug)).limit(1);
   if (!project) return null;

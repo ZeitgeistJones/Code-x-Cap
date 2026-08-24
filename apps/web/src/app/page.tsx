@@ -9,6 +9,7 @@ import {
 } from "@codexcap/core";
 import { refreshAllMarketsAction } from "@/app/actions/market";
 import { refreshAllGithubAction } from "@/app/actions/github";
+import { seedResearchAction } from "@/app/actions/seed";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { FilterBar } from "@/components/FilterBar";
@@ -56,6 +57,11 @@ export default async function HomePage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <form action={seedResearchAction}>
+            <button type="submit" className="btn">
+              Load research seed
+            </button>
+          </form>
           <form action={refreshAllGithubAction}>
             <button type="submit" className="btn">
               Refresh GitHub
@@ -77,8 +83,16 @@ export default async function HomePage({
           <p className="font-mono text-xs uppercase tracking-wider">Database</p>
           <p className="mt-1">{dbError}</p>
           <p className="mt-2 text-ink-400">
-            Set DATABASE_URL (Neon) and run migrations + seed. See README.
+            If you see a missing-column error, wait for the latest deploy, refresh this page (schema
+            auto-patches), then click <span className="text-ink-200">Load research seed</span>.
+            Confirm <span className="font-mono text-ink-300">DATABASE_URL</span> is set in Vercel
+            (plain name, not nested).
           </p>
+          <form action={seedResearchAction} className="mt-3">
+            <button type="submit" className="btn btn-primary">
+              Load research seed now
+            </button>
+          </form>
         </div>
       ) : null}
 
@@ -117,11 +131,18 @@ export default async function HomePage({
             {projects.length === 0 ? (
               <tr>
                 <td colSpan={15} className="py-10 text-center text-ink-500">
-                  No projects yet.{" "}
-                  <Link href="/projects/new" className="text-accent">
-                    Add one
-                  </Link>{" "}
-                  or run research seed.
+                  <p>
+                    No projects yet.{" "}
+                    <Link href="/projects/new" className="text-accent">
+                      Add one
+                    </Link>{" "}
+                    or load the research pack.
+                  </p>
+                  <form action={seedResearchAction} className="mt-3 inline-block">
+                    <button type="submit" className="btn btn-primary">
+                      Load research seed
+                    </button>
+                  </form>
                 </td>
               </tr>
             ) : (
