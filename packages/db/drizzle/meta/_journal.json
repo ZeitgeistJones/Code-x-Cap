@@ -15,6 +15,13 @@
       "when": 1724451000000,
       "tag": "0001_discovery_tier",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1724452000000,
+      "tag": "0002_writeup_fields",
+      "breakpoints": true
     }
   ]
 }

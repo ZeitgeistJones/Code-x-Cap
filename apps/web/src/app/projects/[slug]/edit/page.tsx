@@ -70,12 +70,39 @@ export default async function EditProjectPage({
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Why on this list</label>
+            <label className="label">Why on this list (short)</label>
             <textarea
-              className="input min-h-[88px]"
+              className="input min-h-[72px]"
               name="trackingReason"
               defaultValue={project.trackingReason ?? ""}
-              placeholder="Why this project is tracked…"
+              placeholder="One-line tracking reason…"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Why it&apos;s interesting (write-up)</label>
+            <textarea
+              className="input min-h-[120px]"
+              name="writeup"
+              defaultValue={project.writeup ?? ""}
+              placeholder="Full research write-up…"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">What&apos;s holding it back</label>
+            <textarea
+              className="input min-h-[100px]"
+              name="whatsHoldingBack"
+              defaultValue={project.whatsHoldingBack ?? ""}
+              placeholder="Risks, gaps, caveats…"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">What to watch</label>
+            <textarea
+              className="input min-h-[88px]"
+              name="whatToWatch"
+              defaultValue={project.whatToWatch ?? ""}
+              placeholder="Monitoring triggers / events…"
             />
           </div>
           <div className="sm:col-span-2">

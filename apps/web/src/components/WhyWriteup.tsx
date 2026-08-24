@@ -9,6 +9,9 @@ export type WhyWriteupData = {
   discoveryTier: string | null;
   projectStatus: string;
   shortDescription: string | null;
+  writeup: string | null;
+  whatsHoldingBack: string | null;
+  whatToWatch: string | null;
   trackingReason: string | null;
   researchContext: string | null;
   tokenSymbol?: string | null;
@@ -17,6 +20,8 @@ export type WhyWriteupData = {
 export function WhyWriteupBody({ data }: { data: WhyWriteupData }) {
   const tier = (data.discoveryTier ?? "under_the_radar").replace(/_/g, " ");
   const status = data.projectStatus.replace(/_/g, " ");
+  const interesting =
+    data.writeup?.trim() || data.trackingReason?.trim() || data.shortDescription?.trim() || null;
 
   return (
     <div className="space-y-4 text-sm leading-relaxed text-ink-300">
@@ -34,23 +39,39 @@ export function WhyWriteupBody({ data }: { data: WhyWriteupData }) {
         )}
       </div>
 
-      {data.shortDescription ? (
-        <p className="text-ink-200">{data.shortDescription}</p>
-      ) : null}
-
       <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">Why on this list</h3>
+        <h3 className="font-mono text-[10px] uppercase tracking-widest text-accent">
+          Why it&apos;s interesting
+        </h3>
         <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
-          {data.trackingReason?.trim() || "No tracking reason recorded yet."}
+          {interesting || "No write-up recorded yet."}
         </p>
       </div>
 
       <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">Research framing</h3>
-        <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
-          {data.researchContext?.trim() || "No research context recorded yet."}
+        <h3 className="font-mono text-[10px] uppercase tracking-widest text-warn">
+          What&apos;s holding it back
+        </h3>
+        <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
+          {data.whatsHoldingBack?.trim() || "Not recorded yet."}
         </p>
       </div>
+
+      <div>
+        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">What to watch</h3>
+        <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
+          {data.whatToWatch?.trim() || "Not recorded yet."}
+        </p>
+      </div>
+
+      {data.researchContext?.trim() ? (
+        <div>
+          <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+            Research framing
+          </h3>
+          <p className="mt-1.5 whitespace-pre-wrap text-ink-400">{data.researchContext.trim()}</p>
+        </div>
+      ) : null}
 
       <p className="font-mono text-[10px] text-ink-600">
         Discovery tier ≠ status. Tier is how we found / rank it; status is lifecycle (watch, migration,

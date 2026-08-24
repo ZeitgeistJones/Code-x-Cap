@@ -112,13 +112,13 @@ export default async function ProjectDetailPage({
         </div>
       </header>
 
-      {/* Why on this list — research write-up */}
+      {/* Why interesting / holding back / watch */}
       <section id="why" className="panel scroll-mt-6 border-accent/20 p-5">
-        <h2 className="font-display text-xl text-ink-100">Why on this list</h2>
+        <h2 className="font-display text-xl text-ink-100">Research write-up</h2>
         <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-500">
           Discovery framing · not a buy signal
         </p>
-        <div className="mt-4 space-y-4 text-sm leading-relaxed">
+        <div className="mt-4 space-y-5 text-sm leading-relaxed">
           <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
             <span className="rounded-sm border border-accent/40 bg-accent-muted px-1.5 py-0.5 text-accent">
               {(project.discoveryTier ?? "under_the_radar").replace(/_/g, " ")}
@@ -128,27 +128,49 @@ export default async function ProjectDetailPage({
             </span>
           </div>
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-              Why tracked
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-accent">
+              Why it&apos;s interesting
             </h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
-              {project.trackingReason?.trim() || "No tracking reason recorded yet. Add one when editing."}
+              {project.writeup?.trim() ||
+                project.trackingReason?.trim() ||
+                "No write-up recorded yet. Add one when editing."}
+            </p>
+          </div>
+          <div>
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-warn">
+              What&apos;s holding it back
+            </h3>
+            <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
+              {project.whatsHoldingBack?.trim() || "Not recorded yet."}
             </p>
           </div>
           <div>
             <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-              Research framing
+              What to watch
             </h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
-              {project.researchContext?.trim() || "No research context recorded yet."}
+              {project.whatToWatch?.trim() || "Not recorded yet."}
             </p>
           </div>
-          {project.notes[0] ? (
+          {project.researchContext?.trim() ? (
             <div>
               <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-                Latest research note
+                Research framing
               </h3>
-              <p className="mt-1.5 whitespace-pre-wrap text-ink-300">{project.notes[0].body}</p>
+              <p className="mt-1.5 whitespace-pre-wrap text-ink-400">
+                {project.researchContext.trim()}
+              </p>
+            </div>
+          ) : null}
+          {project.trackingReason?.trim() && project.writeup?.trim() ? (
+            <div>
+              <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+                Tracking reason
+              </h3>
+              <p className="mt-1.5 whitespace-pre-wrap text-ink-400">
+                {project.trackingReason.trim()}
+              </p>
             </div>
           ) : null}
         </div>
