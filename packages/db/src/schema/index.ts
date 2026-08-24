@@ -58,6 +58,12 @@ export const projects = pgTable(
      * external_verified | mixed | project_operated | unknown
      */
     activityOrigin: text("activity_origin").notNull().default("unknown"),
+    /**
+     * Future adoption signals (all nullable). Do not invent values.
+     * Shape: activeUsers, payingUsers, uniqueX402Payers, apiCalls,
+     * x402PaymentVolume, packageDownloads, externalIntegrations, externalContributors
+     */
+    adoptionMetrics: jsonb("adoption_metrics").$type<Record<string, number | string | null>>(),
     primaryCategory: text("primary_category"),
     websiteUrl: text("website_url"),
     twitterUrl: text("twitter_url"),
@@ -281,6 +287,12 @@ export const activitySignals = pgTable(
     summary: text("summary"),
     /** Who generated this signal: external_verified | mixed | project_operated | unknown */
     activityOrigin: text("activity_origin").notNull().default("unknown"),
+    /**
+     * Structured code metrics when signal_type=code:
+     * { meaningful7, meaningful30, total7, total30, daysSinceMeaningful,
+     *   filesChanged30?, additions30?, deletions30? }
+     */
+    metrics: jsonb("metrics").$type<Record<string, number | null>>(),
     ...timestamps,
   },
   (t) => [uniqueIndex("activity_signals_project_type_uidx").on(t.projectId, t.signalType)],

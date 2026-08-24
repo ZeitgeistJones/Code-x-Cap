@@ -259,28 +259,62 @@ async function refreshProjectCodeSignal(projectId: string) {
 
   let meaningful7 = 0;
   let meaningful30 = 0;
+  let total7 = 0;
+  let total30 = 0;
+  let filesChanged30: number | null = null;
+  let additions30: number | null = null;
+  let deletions30: number | null = null;
+
   if (repoIds.length) {
     const acts = await database
       .select({
         timestamp: githubActivities.timestamp,
         meaningfulScore: githubActivities.meaningfulScore,
+        filesChanged: githubActivities.filesChanged,
+        additions: githubActivities.additions,
+        deletions: githubActivities.deletions,
       })
       .from(githubActivities)
-      .where(
-        and(
-          inArray(githubActivities.repositoryId, repoIds),
-          gte(githubActivities.meaningfulScore, 5),
-        ),
-      );
-    meaningful7 = acts.filter((a) => a.timestamp >= since7).length;
-    meaningful30 = acts.filter((a) => a.timestamp >= since30).length;
+      .where(inArray(githubActivities.repositoryId, repoIds));
+
+    const in7 = acts.filter((a) => a.timestamp >= since7);
+    const in30 = acts.filter((a) => a.timestamp >= since30);
+    total7 = in7.length;
+    total30 = in30.length;
+    meaningful7 = in7.filter((a) => (a.meaningfulScore ?? 0) >= 5).length;
+    meaningful30 = in30.filter((a) => (a.meaningfulScore ?? 0) >= 5).length;
+
+    const churnKnown = in30.filter(
+      (a) => a.filesChanged != null || a.additions != null || a.deletions != null,
+    );
+    if (churnKnown.length) {
+      filesChanged30 = churnKnown.reduce((s, a) => s + (a.filesChanged ?? 0), 0);
+      additions30 = churnKnown.reduce((s, a) => s + (a.additions ?? 0), 0);
+      deletions30 = churnKnown.reduce((s, a) => s + (a.deletions ?? 0), 0);
+    }
   }
+
+  const days =
+    latestMeaningful != null
+      ? Math.floor((Date.now() - latestMeaningful.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
 
   const summary = latestMeaningful
     ? `Meaningful code ${latestMeaningful.toISOString().slice(0, 10)} · ${meaningful7} in 7d · ${meaningful30} in 30d`
     : latestAny
       ? `Commits seen but none classified meaningful yet · last ${latestAny.toISOString().slice(0, 10)}`
       : "No GitHub activity ingested yet";
+
+  const metrics = {
+    meaningful7,
+    meaningful30,
+    total7,
+    total30,
+    daysSinceMeaningful: days,
+    filesChanged30,
+    additions30,
+    deletions30,
+  };
 
   const existing = await database
     .select()
@@ -293,6 +327,7 @@ async function refreshProjectCodeSignal(projectId: string) {
     source: "github_api",
     confidence: latestMeaningful ? 8 : latestAny ? 4 : 2,
     summary,
+    metrics,
     updatedAt: new Date(),
   };
 
@@ -339,6 +374,14 @@ export async function recentActivitiesForRepos(repositoryIds: string[], limit = 
     .limit(limit);
 }
 
+const NOISE_CLASSES = new Set([
+  "documentation",
+  "dependency_update",
+  "formatting",
+  "generated",
+  "readme_only",
+]);
+
 export async function projectGithubStats(projectId: string) {
   const repos = await db()
     .select()
@@ -350,15 +393,44 @@ export async function projectGithubStats(projectId: string) {
 
   let meaningful7 = 0;
   let meaningful30 = 0;
+  let total7 = 0;
+  let total30 = 0;
+  let filesChanged30: number | null = null;
+  let additions30: number | null = null;
+  let deletions30: number | null = null;
+  let noise30 = 0;
   let activities: (typeof githubActivities.$inferSelect)[] = [];
+  let allScored: (typeof githubActivities.$inferSelect)[] = [];
+
   if (repoIds.length) {
-    activities = await recentActivitiesForRepos(repoIds, 50);
-    meaningful7 = activities.filter(
-      (a) => a.timestamp >= since7 && (a.meaningfulScore ?? 0) >= 5,
+    allScored = await db()
+      .select()
+      .from(githubActivities)
+      .where(inArray(githubActivities.repositoryId, repoIds))
+      .orderBy(desc(githubActivities.timestamp));
+
+    activities = allScored.slice(0, 80);
+
+    const in7 = allScored.filter((a) => a.timestamp >= since7);
+    const in30 = allScored.filter((a) => a.timestamp >= since30);
+    total7 = in7.length;
+    total30 = in30.length;
+    meaningful7 = in7.filter((a) => (a.meaningfulScore ?? 0) >= 5).length;
+    meaningful30 = in30.filter((a) => (a.meaningfulScore ?? 0) >= 5).length;
+    noise30 = in30.filter(
+      (a) =>
+        (a.meaningfulScore ?? 0) < 5 ||
+        NOISE_CLASSES.has((a.classification ?? "").toLowerCase()),
     ).length;
-    meaningful30 = activities.filter(
-      (a) => a.timestamp >= since30 && (a.meaningfulScore ?? 0) >= 5,
-    ).length;
+
+    const churnKnown = in30.filter(
+      (a) => a.filesChanged != null || a.additions != null || a.deletions != null,
+    );
+    if (churnKnown.length) {
+      filesChanged30 = churnKnown.reduce((s, a) => s + (a.filesChanged ?? 0), 0);
+      additions30 = churnKnown.reduce((s, a) => s + (a.additions ?? 0), 0);
+      deletions30 = churnKnown.reduce((s, a) => s + (a.deletions ?? 0), 0);
+    }
   }
 
   const latestMeaningful = repos
@@ -371,12 +443,46 @@ export async function projectGithubStats(projectId: string) {
     .filter((d): d is Date => !!d)
     .sort((a, b) => b.getTime() - a.getTime())[0];
 
+  const daysSinceMeaningful =
+    latestMeaningful != null
+      ? Math.floor((Date.now() - latestMeaningful.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+  const recentMeaningful = allScored
+    .filter((a) => (a.meaningfulScore ?? 0) >= 5)
+    .slice(0, 8);
+
+  const noiseExcluded = allScored
+    .filter(
+      (a) =>
+        (a.meaningfulScore ?? 0) < 5 &&
+        NOISE_CLASSES.has((a.classification ?? "").toLowerCase()),
+    )
+    .slice(0, 12);
+
+  const noiseSummary: Record<string, number> = {};
+  for (const a of allScored.filter((x) => x.timestamp >= since30)) {
+    if ((a.meaningfulScore ?? 0) >= 5) continue;
+    const key = (a.classification ?? "unknown").replace(/_/g, " ");
+    noiseSummary[key] = (noiseSummary[key] ?? 0) + 1;
+  }
+
   return {
     repos,
     activities,
     meaningful7,
     meaningful30,
+    total7,
+    total30,
+    filesChanged30,
+    additions30,
+    deletions30,
+    noise30,
+    daysSinceMeaningful,
     latestMeaningful,
     latestCommit,
+    recentMeaningful,
+    noiseExcluded,
+    noiseSummary,
   };
 }

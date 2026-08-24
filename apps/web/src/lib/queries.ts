@@ -12,7 +12,7 @@ import {
   watchlistItems,
 } from "@codexcap/db/schema";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
-import { recencyBadge } from "@codexcap/core";
+import { codeDisplayForProject, pickPrimaryRepo, recencyBadge } from "@codexcap/core";
 import { db } from "@/lib/db";
 import { projectGithubStats } from "@/lib/github";
 import { latestSnapshotsByTokenIds } from "@/lib/market";
@@ -88,7 +88,7 @@ export async function listProjects(filters: ProjectFilters = {}) {
 
   const ids = rows.map((r) => r.id);
 
-  const [tokenRows, tagRows, signalRows, watchSet] = await Promise.all([
+  const [tokenRows, tagRows, signalRows, watchSet, repoRows] = await Promise.all([
     database.select().from(tokens).where(inArray(tokens.projectId, ids)),
     database
       .select({
@@ -103,6 +103,7 @@ export async function listProjects(filters: ProjectFilters = {}) {
       .where(inArray(projectTags.projectId, ids)),
     database.select().from(activitySignals).where(inArray(activitySignals.projectId, ids)),
     database.select().from(watchlistItems).where(inArray(watchlistItems.projectId, ids)),
+    database.select().from(githubRepositories).where(inArray(githubRepositories.projectId, ids)),
   ]);
 
   const watched = new Set(watchSet.map((w) => w.projectId));
@@ -118,6 +119,28 @@ export async function listProjects(filters: ProjectFilters = {}) {
     const codeSignal = signals.find((s) => s.signalType === "code");
     const productSignal = signals.find((s) => s.signalType === "product");
     const market = current ? snapMap.get(current.id) ?? null : null;
+    const pRepos = repoRows.filter((r) => r.projectId === p.id);
+    const primary = pickPrimaryRepo(pRepos);
+    const metrics = (codeSignal?.metrics ?? null) as Record<string, number | null> | null;
+
+    const latestMeaningful =
+      pRepos
+        .map((r) => r.latestMeaningfulCommitAt)
+        .filter((d): d is Date => !!d)
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? codeSignal?.latestAt ?? null;
+
+    const latestCommit =
+      pRepos
+        .map((r) => r.latestCommitAt)
+        .filter((d): d is Date => !!d)
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+    const codeDisplay = codeDisplayForProject({
+      buildVisibility: p.buildVisibility,
+      latestMeaningfulAt: latestMeaningful,
+      latestCommitAt: latestCommit,
+      hasPublicRepo: pRepos.length > 0,
+    });
 
     return {
       ...p,
@@ -126,9 +149,13 @@ export async function listProjects(filters: ProjectFilters = {}) {
       currentToken: current ?? null,
       market,
       signals,
-      codeRecency: recencyBadge(codeSignal?.latestAt),
+      repositories: pRepos,
+      primaryRepo: primary,
+      codeMetrics: metrics,
+      codeDisplay,
+      codeRecency: codeDisplay.openRecency ?? recencyBadge(latestMeaningful ?? latestCommit),
       productRecency: recencyBadge(productSignal?.latestAt),
-      lastMeaningfulBuild: codeSignal?.latestAt ?? null,
+      lastMeaningfulBuild: latestMeaningful,
       codeSummary: codeSignal?.summary ?? null,
       onWatchlist: watched.has(p.id),
     };
@@ -141,7 +168,10 @@ export async function listProjects(filters: ProjectFilters = {}) {
     result = result.filter((p) => p.tags.some((t) => t.slug === filters.tag));
   }
   if (filters.codeRecency) {
-    result = result.filter((p) => p.codeRecency === filters.codeRecency);
+    result = result.filter((p) => {
+      if (p.codeDisplay.mode !== "open_recency") return false;
+      return p.codeRecency === filters.codeRecency;
+    });
   }
   if (filters.preToken) {
     result = result.filter((p) => p.tokens.length === 0 || p.projectStatus === "pre_token");

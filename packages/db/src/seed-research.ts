@@ -45,6 +45,8 @@ export async function ensureDiscoveryColumns(db: ReturnType<typeof createDb>) {
   await db.execute(
     sql`ALTER TABLE "activity_signals" ADD COLUMN IF NOT EXISTS "activity_origin" text DEFAULT 'unknown' NOT NULL`,
   );
+  await db.execute(sql`ALTER TABLE "activity_signals" ADD COLUMN IF NOT EXISTS "metrics" jsonb`);
+  await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "adoption_metrics" jsonb`);
 }
 
 type SeedRepo = { owner: string; repo: string; role: string };
@@ -239,7 +241,7 @@ The product currently functions without requiring MAIN.`,
     chainId: 8453,
     identity: 10,
     tagSlugs: ["ai-agents", "agent-hosting", "x402", "openclaw", "infrastructure", "creator-tools", "base", "paid-product"],
-    repos: [{ owner: "Eskyee", repo: "agentbot-opensource", role: "core" }],
+    repos: [{ owner: "Eskyee", repo: "agentbot-opensource", role: "mirror" }],
     token: {
       symbol: "AGENTBOT",
       ca: "0x986b41c76ab8b7350079613340ee692773b34ba3",
@@ -427,7 +429,7 @@ Unknown: paying customer count, active deployments, MRR, retention, HermesOS pay
     tagSlugs: ["x402", "trading-agent", "autonomous-agent", "token-analysis", "defi", "self-funding", "bankr", "erc-8004", "base"],
     repos: [
       { owner: "deluagent", repo: "delu-agent", role: "core" },
-      { owner: "deluonchain", repo: "deluskill", role: "sdk" },
+      { owner: "deluonchain", repo: "deluskill", role: "skill" },
     ],
     token: {
       symbol: "DELU",
@@ -487,7 +489,7 @@ We also need to distinguish product usage from self-operated activity. A develop
     chainId: 8453,
     identity: 9,
     tagSlugs: ["x402", "attention", "analytics", "signals", "social-data", "api", "base", "intelligence"],
-    repos: [{ owner: "checkrsocial", repo: "checkr-skill", role: "sdk" }],
+    repos: [{ owner: "checkrsocial", repo: "checkr-skill", role: "skill" }],
     token: {
       symbol: "CHECKR",
       ca: "0x2efac0a597a37050aafcf4bec627249d533dd9f8",
@@ -548,7 +550,7 @@ The other unresolved issue is usage. We need fresh evidence of actual paid x402 
     tagSlugs: ["x402", "mcp", "sdk", "cli", "agent-marketplace", "developer-tooling", "base", "migration", "relaunch"],
     repos: [
       { owner: "madebyshun", repo: "blue-agent", role: "core" },
-      { owner: "madebyshun", repo: "blueagent-x402-services", role: "experimental" },
+      { owner: "madebyshun", repo: "blueagent-x402-services", role: "x402" },
     ],
     token: {
       symbol: "BLUEAGENT",
@@ -667,7 +669,7 @@ The exact HEIR contract also should be independently verified from a current pro
       status: "trading",
       sourceUrl: "https://www.apinow.fun/token",
     },
-    buildVisibility: "unknown",
+    buildVisibility: "no_verified_repo",
     researchPriority: "medium",
     researchQuestion: "How much API usage accrues to APINOW vs endpoint tokens, and how much is external?",
     whatWouldChangeThesis: "Segmented usage (USDC vs APINOW vs endpoint tokens) with activity_origin tagged external_verified.",
@@ -725,6 +727,7 @@ Usage metrics need to be separated into USDC-paid calls, APINOW-linked activity,
     repos: [
       { owner: "BuiltByEcho", repo: "vaultline", role: "core" },
       { owner: "BuiltByEcho", repo: "agent-brief", role: "sdk" },
+      { owner: "BuiltByEcho", repo: ".github", role: "org" },
     ],
     token: { symbol: "ECHO", ca: null, status: "unknown", sourceUrl: null },
     buildVisibility: "open_stale",
@@ -835,7 +838,7 @@ STARKBOT is a perfect example of: "excellent codebase, weak current builder sign
     tagSlugs: ["x402", "compute", "vps", "domains", "autonomous-agents", "infrastructure", "self-healing", "base", "dormant"],
     repos: [
       { owner: "otonix-ai", repo: "otonix", role: "core" },
-      { owner: "otonix-ai", repo: "agent", role: "experimental" },
+      { owner: "otonix-ai", repo: "agent", role: "historical" },
     ],
     token: { symbol: "OTX", ca: null, status: "unknown", sourceUrl: null },
     buildVisibility: "open_stale",
@@ -1189,6 +1192,16 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
       }
     } else if (match.projectId !== projectId) {
       console.warn(`repo ${r.owner}/${r.repo} already linked to another project — left as-is`);
+    } else {
+      await db
+        .update(githubRepositories)
+        .set({
+          repoRole: r.role,
+          identityVerified: true,
+          url: `https://github.com/${r.owner}/${r.repo}`,
+          updatedAt: now,
+        })
+        .where(eq(githubRepositories.id, match.id));
     }
   }
 

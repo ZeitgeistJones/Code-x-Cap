@@ -11,6 +11,7 @@ import { refreshAllMarketsAction } from "@/app/actions/market";
 import { refreshAllGithubAction } from "@/app/actions/github";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
+import { BuildCodeCell } from "@/components/BuildCodeCell";
 import { FilterBar } from "@/components/FilterBar";
 import { SeedResearchButton } from "@/components/SeedResearchButton";
 import { WhyWriteupButton } from "@/components/WhyWriteup";
@@ -126,9 +127,8 @@ export default async function HomePage({
               <th>Vol 24h</th>
               <th>Chain</th>
               <th>Identity</th>
-              <th>Code</th>
+              <th>Build</th>
               <th>Product</th>
-              <th>Last meaningful</th>
               <th>Why</th>
               <th></th>
             </tr>
@@ -136,7 +136,7 @@ export default async function HomePage({
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-10 text-center text-ink-500">
+                <td colSpan={14} className="py-10 text-center text-ink-500">
                   <p>
                     No projects yet.{" "}
                     <Link href="/projects/new" className="text-accent">
@@ -193,20 +193,27 @@ export default async function HomePage({
                   <td className="font-mono text-xs text-ink-400">{p.primaryChain ?? "—"}</td>
                   <td className="font-mono text-xs">{p.identityConfidence ?? 0}/10</td>
                   <td>
-                    <RecencyPill badge={p.codeRecency} />
+                    <BuildCodeCell
+                      buildVisibility={p.buildVisibility}
+                      repos={p.repositories.map((r) => ({
+                        owner: r.owner,
+                        repo: r.repo,
+                        url: r.url,
+                        repoRole: r.repoRole,
+                        identityVerified: r.identityVerified,
+                        latestCommitAt: r.latestCommitAt,
+                        latestMeaningfulCommitAt: r.latestMeaningfulCommitAt,
+                      }))}
+                      meaningful7={p.codeMetrics?.meaningful7 ?? null}
+                      meaningful30={p.codeMetrics?.meaningful30 ?? null}
+                      daysSinceMeaningful={p.codeMetrics?.daysSinceMeaningful ?? null}
+                      latestMeaningfulAt={p.lastMeaningfulBuild}
+                      latestCommitAt={p.primaryRepo?.latestCommitAt ?? null}
+                      codeMetrics={p.codeMetrics}
+                    />
                   </td>
                   <td>
                     <RecencyPill badge={p.productRecency} />
-                  </td>
-                  <td className="font-mono text-[11px] text-ink-400">
-                    {p.lastMeaningfulBuild
-                      ? new Date(p.lastMeaningfulBuild).toISOString().slice(0, 10)
-                      : "—"}
-                    {p.codeSummary ? (
-                      <div className="mt-0.5 max-w-[140px] truncate text-[10px] text-ink-600">
-                        {p.codeSummary}
-                      </div>
-                    ) : null}
                   </td>
                   <td>
                     <WhyWriteupButton

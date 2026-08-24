@@ -29,6 +29,13 @@
       "when": 1724453000000,
       "tag": "0003_research_pass2",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1724454000000,
+      "tag": "0004_build_metrics",
+      "breakpoints": true
     }
   ]
 }

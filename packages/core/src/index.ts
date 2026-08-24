@@ -1,4 +1,6 @@
 export * from "./classify-commit";
+export * from "./recency";
+export * from "./build-display";
 
 /** Domain enums, recency helpers, slug utils — shared across web/worker/db. */
 
@@ -17,6 +19,7 @@ export const BUILD_VISIBILITIES = [
   "public_snapshot_private_current",
   "integration_public_core_private",
   "closed_private",
+  "no_verified_repo",
   "unknown",
 ] as const;
 export type BuildVisibility = (typeof BUILD_VISIBILITIES)[number];
@@ -92,12 +95,17 @@ export const REPO_ROLES = [
   "backend",
   "frontend",
   "sdk",
+  "skill",
   "contracts",
   "mcp",
   "cli",
   "docs",
   "deployment",
   "experimental",
+  "mirror",
+  "historical",
+  "org",
+  "x402",
 ] as const;
 export type RepoRole = (typeof REPO_ROLES)[number];
 
@@ -174,42 +182,6 @@ export const CHAINS = [
   { id: 0, slug: "solana", name: "Solana" },
   { id: -1, slug: "other", name: "Other" },
 ] as const;
-
-export type RecencyBadge = "hot" | "active" | "cooling" | "dormant" | "unknown";
-
-export const RECENCY_THRESHOLDS = {
-  hotDays: 7,
-  activeDays: 30,
-  coolingDays: 60,
-} as const;
-
-export function daysSince(date: Date | string | null | undefined, now = new Date()): number | null {
-  if (!date) return null;
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(d.getTime())) return null;
-  return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-export function recencyBadge(
-  latestAt: Date | string | null | undefined,
-  now = new Date(),
-  thresholds = RECENCY_THRESHOLDS,
-): RecencyBadge {
-  const days = daysSince(latestAt, now);
-  if (days === null) return "unknown";
-  if (days <= thresholds.hotDays) return "hot";
-  if (days <= thresholds.activeDays) return "active";
-  if (days <= thresholds.coolingDays) return "cooling";
-  return "dormant";
-}
-
-export const RECENCY_LABELS: Record<RecencyBadge, string> = {
-  hot: "HOT",
-  active: "ACTIVE",
-  cooling: "COOLING",
-  dormant: "DORMANT",
-  unknown: "UNKNOWN",
-};
 
 export function slugify(input: string): string {
   return input

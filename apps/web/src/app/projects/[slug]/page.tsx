@@ -353,18 +353,35 @@ export default async function ProjectDetailPage({
         </form>
       </section>
 
-      {/* GitHub */}
-      <section>
-        <h2 className="section-title">GitHub intelligence</h2>
+      {/* Build activity */}
+      <section id="build" className="scroll-mt-6">
+        <h2 className="section-title">Build activity</h2>
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-500">
+          Public evidence only · unknown beats guessed
+        </p>
+
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <div className="panel p-3">
             <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
-              Last meaningful
+              Build visibility
+            </div>
+            <div className="mt-1 font-mono text-sm uppercase text-warn">
+              {(project.buildVisibility ?? "unknown").replace(/_/g, " ")}
+            </div>
+          </div>
+          <div className="panel p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
+              Last meaningful build
             </div>
             <div className="mt-1 font-mono text-lg text-ink-100">
               {project.github.latestMeaningful
                 ? new Date(project.github.latestMeaningful).toISOString().slice(0, 10)
                 : "—"}
+            </div>
+            <div className="mt-0.5 font-mono text-[10px] text-ink-500">
+              {project.github.daysSinceMeaningful != null
+                ? `${project.github.daysSinceMeaningful}d ago`
+                : "unknown"}
             </div>
           </div>
           <div className="panel p-3">
@@ -379,26 +396,40 @@ export default async function ProjectDetailPage({
           </div>
           <div className="panel p-3">
             <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
-              Meaningful 7d
+              Meaningful commits
             </div>
-            <div className="mt-1 font-mono text-lg text-accent">{project.github.meaningful7}</div>
-          </div>
-          <div className="panel p-3">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
-              Meaningful 30d
+            <div className="mt-1 font-mono text-lg text-accent">
+              {project.github.meaningful7}
+              <span className="text-ink-500"> / 7d</span>
             </div>
-            <div className="mt-1 font-mono text-lg text-ink-100">{project.github.meaningful30}</div>
+            <div className="font-mono text-sm text-ink-200">
+              {project.github.meaningful30}
+              <span className="text-ink-500"> / 30d</span>
+            </div>
+            <div className="mt-1 font-mono text-[10px] text-ink-600">
+              total {project.github.total7}/{project.github.total30} commits 7d/30d
+            </div>
           </div>
         </div>
+
+        {(project.github.filesChanged30 != null ||
+          project.github.additions30 != null ||
+          project.github.deletions30 != null) && (
+          <div className="mt-2 font-mono text-[10px] text-ink-500">
+            30d churn (hydrated commits only): files {project.github.filesChanged30 ?? "—"} · +
+            {project.github.additions30 ?? "—"} −{project.github.deletions30 ?? "—"}
+          </div>
+        )}
 
         <ul className="mt-3 space-y-2">
           {project.repositories.map((r) => (
             <li key={r.id} className="panel flex flex-wrap items-center justify-between gap-2 px-3 py-2">
               <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-sm text-accent">
-                {r.owner}/{r.repo}
+                ↗ {r.owner}/{r.repo}
               </a>
-              <span className="font-mono text-[10px] uppercase text-ink-500">{r.repoRole}</span>
+              <span className="font-mono text-[10px] uppercase text-ink-400">{r.repoRole}</span>
               <span className="text-xs text-ink-500">
+                {r.identityVerified ? "identity verified · " : ""}
                 {r.privateOrMissing ? "missing/private" : r.archived ? "archived" : "ok"} · ★{" "}
                 {r.stars ?? 0}
                 {r.latestMeaningfulCommitAt
@@ -408,9 +439,54 @@ export default async function ProjectDetailPage({
             </li>
           ))}
           {project.repositories.length === 0 ? (
-            <li className="text-sm text-ink-500">No repos attached</li>
+            <li className="text-sm text-ink-500">No public repos attached</li>
           ) : null}
         </ul>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="panel p-3">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-accent">
+              Recent meaningful work
+            </h3>
+            {project.github.recentMeaningful.length === 0 ? (
+              <p className="mt-2 text-sm text-ink-500">None ingested yet — Refresh GitHub</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {project.github.recentMeaningful.map((a) => (
+                  <li key={a.id} className="text-sm text-ink-300">
+                    <span className="font-mono text-[10px] text-ink-500">
+                      {new Date(a.timestamp).toISOString().slice(0, 10)}
+                    </span>
+                    {" — "}
+                    {a.sourceUrl ? (
+                      <a href={a.sourceUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
+                        {a.title}
+                      </a>
+                    ) : (
+                      a.title
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="panel p-3">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+              Excluded noise (30d)
+            </h3>
+            {Object.keys(project.github.noiseSummary).length === 0 ? (
+              <p className="mt-2 text-sm text-ink-500">No noise classified yet</p>
+            ) : (
+              <ul className="mt-2 space-y-1 font-mono text-xs text-ink-400">
+                {Object.entries(project.github.noiseSummary).map(([k, n]) => (
+                  <li key={k}>
+                    {n} {k}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
 
         <div className="mt-3 panel overflow-x-auto">
           <table className="table-dense">
