@@ -61,15 +61,17 @@ Open http://localhost:3000 — unlock with your `ADMIN_KEY`.
 
 ## Setup (Vercel)
 
-1. Import this GitHub repo in Vercel.
-2. **Root Directory** = `apps/web`
-3. Open **Build and Output Settings**:
-   - Turn **Output Directory** override **ON**
-   - Set it to exactly: `.next`  
-     (Not `apps/web/.next` — that doubles the path and breaks deploy.)
-4. Install/Build can stay as detected from `apps/web/vercel.json`.
-5. Env vars: `DATABASE_URL`, `ADMIN_KEY`.
-6. Run migrations in Neon (`packages/db/drizzle/0000_phase0_init.sql`), then seed if needed.
+**Easiest (no Output Directory toggle needed):**
+
+1. Import the GitHub repo.
+2. Click **Edit** next to **Root Directory** → **clear it** (use the repo root, not `apps/web`).
+3. Leave Build/Output toggles off — root `vercel.json` sets:
+   - Build: `pnpm --filter @codexcap/web build`
+   - Output: `apps/web/.next`
+4. Env vars: `DATABASE_URL`, `ADMIN_KEY`.
+5. Run Neon migration SQL from `packages/db/drizzle/0000_phase0_init.sql`.
+
+If Root Directory is already `apps/web` and you can’t change Output Directory, clear Root Directory as above and redeploy.
 
 ## Docs
 
