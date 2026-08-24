@@ -217,3 +217,14 @@ export function formatCategory(c: PrimaryCategory | string): string {
 export function formatStatus(s: string): string {
   return s.replace(/_/g, " ");
 }
+
+export function formatUsdCompact(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const n = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(n)) return "—";
+  if (n === 0) return "$0";
+  if (n < 1000) return `$${n.toFixed(n < 1 ? 4 : 2)}`;
+  if (n < 1_000_000) return `$${(n / 1_000).toFixed(1)}K`;
+  if (n < 1_000_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  return `$${(n / 1_000_000_000).toFixed(2)}B`;
+}

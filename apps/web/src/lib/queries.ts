@@ -14,6 +14,7 @@ import {
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { recencyBadge } from "@codexcap/core";
 import { db } from "@/lib/db";
+import { latestSnapshotsByTokenIds } from "@/lib/market";
 
 export type ProjectFilters = {
   q?: string;
@@ -103,6 +104,9 @@ export async function listProjects(filters: ProjectFilters = {}) {
 
   const watched = new Set(watchSet.map((w) => w.projectId));
 
+  const tokenIds = tokenRows.filter((t) => t.isCurrent || true).map((t) => t.id);
+  const snapMap = await latestSnapshotsByTokenIds(tokenIds);
+
   let result = rows.map((p) => {
     const pTokens = tokenRows.filter((t) => t.projectId === p.id);
     const current = pTokens.find((t) => t.isCurrent) ?? pTokens[0];
@@ -110,12 +114,14 @@ export async function listProjects(filters: ProjectFilters = {}) {
     const signals = signalRows.filter((s) => s.projectId === p.id);
     const codeSignal = signals.find((s) => s.signalType === "code");
     const productSignal = signals.find((s) => s.signalType === "product");
+    const market = current ? snapMap.get(current.id) ?? null : null;
 
     return {
       ...p,
       tags: pTags,
       tokens: pTokens,
       currentToken: current ?? null,
+      market,
       signals,
       codeRecency: recencyBadge(codeSignal?.latestAt),
       productRecency: recencyBadge(productSignal?.latestAt),
@@ -177,9 +183,18 @@ export async function getProjectBySlug(slug: string) {
     database.select().from(watchlistItems).where(eq(watchlistItems.projectId, project.id)).limit(1),
   ]);
 
+  const snapMap = await latestSnapshotsByTokenIds(tokenRows.map((t) => t.id));
+  const tokensWithMarket = tokenRows.map((t) => ({
+    ...t,
+    latestMarket: snapMap.get(t.id) ?? null,
+  }));
+  const current = tokensWithMarket.find((t) => t.isCurrent) ?? tokensWithMarket[0] ?? null;
+
   return {
     ...project,
-    tokens: tokenRows,
+    tokens: tokensWithMarket,
+    currentToken: current,
+    market: current?.latestMarket ?? null,
     repositories: repoRows,
     evidence: evidenceRows,
     notes: noteRows,

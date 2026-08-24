@@ -10,6 +10,7 @@ import {
   SCORE_DIMENSIONS,
   TOKEN_ROLES,
   TOKEN_STATUSES,
+  formatUsdCompact,
   recencyBadge,
 } from "@codexcap/core";
 import {
@@ -23,6 +24,7 @@ import {
   upsertScoreAction,
   upsertSignalAction,
 } from "@/app/actions/projects";
+import { refreshProjectMarketsAction } from "@/app/actions/market";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { getProjectBySlug } from "@/lib/queries";
 
@@ -92,6 +94,13 @@ export default async function ProjectDetailPage({
               {project.onWatchlist ? "Unwatch" : "Watch"}
             </button>
           </form>
+          <form action={refreshProjectMarketsAction}>
+            <input type="hidden" name="projectId" value={project.id} />
+            <input type="hidden" name="slug" value={project.slug} />
+            <button type="submit" className="btn">
+              Refresh market
+            </button>
+          </form>
           <form action={deleteProjectAction}>
             <input type="hidden" name="id" value={project.id} />
             <button type="submit" className="btn btn-danger">
@@ -100,6 +109,32 @@ export default async function ProjectDetailPage({
           </form>
         </div>
       </header>
+
+      {/* Market summary */}
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {[
+          { label: "Market cap", value: formatUsdCompact(project.market?.marketCap) },
+          { label: "FDV", value: formatUsdCompact(project.market?.fdv) },
+          { label: "Liquidity", value: formatUsdCompact(project.market?.liquidityUsd) },
+          { label: "Volume 24h", value: formatUsdCompact(project.market?.volume24h) },
+          {
+            label: "Price",
+            value: project.market?.priceUsd
+              ? `$${Number(project.market.priceUsd).toPrecision(4)}`
+              : "—",
+          },
+        ].map((card) => (
+          <div key={card.label} className="panel p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">{card.label}</div>
+            <div className="mt-1 font-mono text-lg text-ink-100">{card.value}</div>
+            <div className="mt-1 text-[10px] text-ink-600">
+              {project.market?.source
+                ? `${project.market.source}${project.market.timestamp ? ` · ${new Date(project.market.timestamp).toISOString().slice(0, 16)}` : ""}`
+                : "No snapshot yet — refresh market"}
+            </div>
+          </div>
+        ))}
+      </section>
 
       {/* Recency */}
       <section>

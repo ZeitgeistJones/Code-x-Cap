@@ -5,7 +5,9 @@ import {
   PRIMARY_CATEGORIES,
   PROJECT_STATUSES,
   TOKEN_STATUSES,
+  formatUsdCompact,
 } from "@codexcap/core";
+import { refreshAllMarketsAction } from "@/app/actions/market";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { FilterBar } from "@/components/FilterBar";
@@ -48,13 +50,19 @@ export default async function HomePage({
         <div>
           <h1 className="font-display text-2xl text-ink-100">Projects</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-400">
-            Manual research database. Market and GitHub columns fill as you enter signals — automation
-            arrives in later phases.
+            Manual research database. Market caps from GeckoTerminal snapshots — refresh to update.
           </p>
         </div>
-        <Link href="/projects/new" className="btn btn-primary">
-          Add project
-        </Link>
+        <div className="flex gap-2">
+          <form action={refreshAllMarketsAction}>
+            <button type="submit" className="btn">
+              Refresh markets
+            </button>
+          </form>
+          <Link href="/projects/new" className="btn btn-primary">
+            Add project
+          </Link>
+        </div>
       </div>
 
       {dbError ? (
@@ -78,7 +86,7 @@ export default async function HomePage({
       </Suspense>
 
       <div className="panel overflow-x-auto">
-        <table className="table-dense min-w-[1100px]">
+        <table className="table-dense min-w-[1280px]">
           <thead>
             <tr>
               <th>Project</th>
@@ -86,6 +94,9 @@ export default async function HomePage({
               <th>Category</th>
               <th>Status</th>
               <th>Token</th>
+              <th>Mcap</th>
+              <th>Liquidity</th>
+              <th>Vol 24h</th>
               <th>Chain</th>
               <th>Identity</th>
               <th>Code</th>
@@ -97,12 +108,12 @@ export default async function HomePage({
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-10 text-center text-ink-500">
+                <td colSpan={14} className="py-10 text-center text-ink-500">
                   No projects yet.{" "}
                   <Link href="/projects/new" className="text-accent">
                     Add one
                   </Link>{" "}
-                  or run <span className="font-mono text-ink-400">pnpm db:seed</span>.
+                  or run research seed.
                 </td>
               </tr>
             ) : (
@@ -136,6 +147,15 @@ export default async function HomePage({
                     ) : (
                       <span className="text-ink-600">pre-token</span>
                     )}
+                  </td>
+                  <td className="font-mono text-xs text-ink-200">
+                    {formatUsdCompact(p.market?.marketCap)}
+                  </td>
+                  <td className="font-mono text-xs text-ink-300">
+                    {formatUsdCompact(p.market?.liquidityUsd)}
+                  </td>
+                  <td className="font-mono text-xs text-ink-400">
+                    {formatUsdCompact(p.market?.volume24h)}
                   </td>
                   <td className="font-mono text-xs text-ink-400">{p.primaryChain ?? "—"}</td>
                   <td className="font-mono text-xs">{p.identityConfidence ?? 0}/10</td>
