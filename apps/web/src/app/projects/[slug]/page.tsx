@@ -25,6 +25,7 @@ import {
   upsertSignalAction,
 } from "@/app/actions/projects";
 import { refreshProjectMarketsAction } from "@/app/actions/market";
+import { refreshProjectGithubAction } from "@/app/actions/github";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { getProjectBySlug } from "@/lib/queries";
 
@@ -86,6 +87,13 @@ export default async function ProjectDetailPage({
             <input type="hidden" name="slug" value={project.slug} />
             <button type="submit" className="btn">
               {project.onWatchlist ? "Unwatch" : "Watch"}
+            </button>
+          </form>
+          <form action={refreshProjectGithubAction}>
+            <input type="hidden" name="projectId" value={project.id} />
+            <input type="hidden" name="slug" value={project.slug} />
+            <button type="submit" className="btn">
+              Refresh GitHub
             </button>
           </form>
           <form action={refreshProjectMarketsAction}>
@@ -306,7 +314,42 @@ export default async function ProjectDetailPage({
 
       {/* GitHub */}
       <section>
-        <h2 className="section-title">GitHub</h2>
+        <h2 className="section-title">GitHub intelligence</h2>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="panel p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
+              Last meaningful
+            </div>
+            <div className="mt-1 font-mono text-lg text-ink-100">
+              {project.github.latestMeaningful
+                ? new Date(project.github.latestMeaningful).toISOString().slice(0, 10)
+                : "—"}
+            </div>
+          </div>
+          <div className="panel p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
+              Last commit
+            </div>
+            <div className="mt-1 font-mono text-lg text-ink-100">
+              {project.github.latestCommit
+                ? new Date(project.github.latestCommit).toISOString().slice(0, 10)
+                : "—"}
+            </div>
+          </div>
+          <div className="panel p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
+              Meaningful 7d
+            </div>
+            <div className="mt-1 font-mono text-lg text-accent">{project.github.meaningful7}</div>
+          </div>
+          <div className="panel p-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-ink-500">
+              Meaningful 30d
+            </div>
+            <div className="mt-1 font-mono text-lg text-ink-100">{project.github.meaningful30}</div>
+          </div>
+        </div>
+
         <ul className="mt-3 space-y-2">
           {project.repositories.map((r) => (
             <li key={r.id} className="panel flex flex-wrap items-center justify-between gap-2 px-3 py-2">
@@ -315,7 +358,11 @@ export default async function ProjectDetailPage({
               </a>
               <span className="font-mono text-[10px] uppercase text-ink-500">{r.repoRole}</span>
               <span className="text-xs text-ink-500">
-                {r.identityVerified ? "verified" : "unverified"} · stars {r.stars ?? 0}
+                {r.privateOrMissing ? "missing/private" : r.archived ? "archived" : "ok"} · ★{" "}
+                {r.stars ?? 0}
+                {r.latestMeaningfulCommitAt
+                  ? ` · meaningful ${new Date(r.latestMeaningfulCommitAt).toISOString().slice(0, 10)}`
+                  : ""}
               </span>
             </li>
           ))}
@@ -323,6 +370,56 @@ export default async function ProjectDetailPage({
             <li className="text-sm text-ink-500">No repos attached</li>
           ) : null}
         </ul>
+
+        <div className="mt-3 panel overflow-x-auto">
+          <table className="table-dense">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Score</th>
+                <th>Class</th>
+                <th>Commit</th>
+                <th>Author</th>
+              </tr>
+            </thead>
+            <tbody>
+              {project.github.activities.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-ink-500">
+                    No commits ingested yet — click Refresh GitHub
+                  </td>
+                </tr>
+              ) : (
+                project.github.activities.slice(0, 25).map((a) => (
+                  <tr key={a.id}>
+                    <td className="font-mono text-[11px] text-ink-400">
+                      {new Date(a.timestamp).toISOString().slice(0, 10)}
+                    </td>
+                    <td className="font-mono text-xs">
+                      <span className={(a.meaningfulScore ?? 0) >= 5 ? "text-accent" : "text-ink-500"}>
+                        {a.meaningfulScore ?? "—"}
+                      </span>
+                    </td>
+                    <td className="font-mono text-[10px] text-ink-500">
+                      {(a.classification ?? "unknown").replace(/_/g, " ")}
+                    </td>
+                    <td className="max-w-[320px] truncate text-sm">
+                      {a.sourceUrl ? (
+                        <a href={a.sourceUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
+                          {a.title}
+                        </a>
+                      ) : (
+                        a.title
+                      )}
+                    </td>
+                    <td className="font-mono text-[11px] text-ink-500">{a.author ?? "—"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
         <form action={addRepoAction} className="mt-3 flex flex-wrap gap-2 panel p-3">
           <input type="hidden" name="projectId" value={project.id} />
           <input type="hidden" name="slug" value={project.slug} />
@@ -352,7 +449,8 @@ export default async function ProjectDetailPage({
             <li key={e.id} className="relative pb-4">
               <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-accent bg-ink-950" />
               <div className="font-mono text-[10px] text-ink-500">
-                {new Date(e.timestamp).toISOString().slice(0, 16).replace("T", " ")} · {e.eventType} · {e.severity}
+                {new Date(e.timestamp).toISOString().slice(0, 16).replace("T", " ")} · {e.eventType} ·{" "}
+                {e.severity}
               </div>
               <div className="text-sm text-ink-100">{e.title}</div>
               {e.description ? <p className="text-xs text-ink-500">{e.description}</p> : null}

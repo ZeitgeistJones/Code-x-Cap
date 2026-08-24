@@ -8,6 +8,7 @@ import {
   formatUsdCompact,
 } from "@codexcap/core";
 import { refreshAllMarketsAction } from "@/app/actions/market";
+import { refreshAllGithubAction } from "@/app/actions/github";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { FilterBar } from "@/components/FilterBar";
@@ -51,10 +52,15 @@ export default async function HomePage({
         <div>
           <h1 className="font-display text-2xl text-ink-100">Projects</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-400">
-            Manual research database. Market caps from GeckoTerminal snapshots — refresh to update.
+            Manual research database. Refresh GitHub for meaningful code; refresh markets for mcap.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <form action={refreshAllGithubAction}>
+            <button type="submit" className="btn">
+              Refresh GitHub
+            </button>
+          </form>
           <form action={refreshAllMarketsAction}>
             <button type="submit" className="btn">
               Refresh markets
@@ -171,6 +177,11 @@ export default async function HomePage({
                     {p.lastMeaningfulBuild
                       ? new Date(p.lastMeaningfulBuild).toISOString().slice(0, 10)
                       : "—"}
+                    {p.codeSummary ? (
+                      <div className="mt-0.5 max-w-[140px] truncate text-[10px] text-ink-600">
+                        {p.codeSummary}
+                      </div>
+                    ) : null}
                   </td>
                   <td>
                     <WhyWriteupButton

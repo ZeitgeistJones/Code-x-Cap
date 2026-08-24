@@ -18,7 +18,12 @@
 
 ## Phase 2 — GitHub intelligence
 
-Repository ingestion, commit history, meaningful commit classifier, 7d/30d activity, GitHub timeline events.
+- [x] Repository ingestion via GitHub API
+- [x] Commit history + file hydration
+- [x] Deterministic meaningful commit classifier
+- [x] Last meaningful commit + 7d/30d counts
+- [x] Code activity signal + timeline events
+- [x] Refresh GitHub (UI + `/api/admin/refresh-github`)
 
 ## Phase 3 — Market intelligence
 

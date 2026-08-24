@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/index.test.ts"
+    "test": "tsx --test src/index.test.ts src/classify-commit.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

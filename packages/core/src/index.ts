@@ -1,3 +1,5 @@
+export * from "./classify-commit";
+
 /** Domain enums, recency helpers, slug utils — shared across web/worker/db. */
 
 export const DISCOVERY_TIERS = [
@@ -91,22 +93,6 @@ export const SCORE_DIMENSIONS = [
   "asymmetry",
 ] as const;
 export type ScoreDimension = (typeof SCORE_DIMENSIONS)[number];
-
-export const COMMIT_CLASSIFICATIONS = [
-  "substantive_feature",
-  "substantive_fix",
-  "contract_work",
-  "SDK_API",
-  "test_infrastructure",
-  "deployment",
-  "documentation",
-  "dependency_update",
-  "formatting",
-  "generated",
-  "README_only",
-  "unknown",
-] as const;
-export type CommitClassification = (typeof COMMIT_CLASSIFICATIONS)[number];
 
 export const EVENT_TYPES = [
   "meaningful_commit",

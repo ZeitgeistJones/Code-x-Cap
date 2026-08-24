@@ -6,6 +6,8 @@ export type {
   GitHubProvider,
 } from "./types";
 export { GeckoTerminalProvider, geckoTerminal } from "./geckoterminal";
+export { GitHubApiProvider, githubApi } from "./github";
+export type { GitHubCommitDetail } from "./github";
 
 export const CONNECTOR_STUBS = {
   market: ["geckoterminal", "coingecko"] as const,

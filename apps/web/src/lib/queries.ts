@@ -14,6 +14,7 @@ import {
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { recencyBadge } from "@codexcap/core";
 import { db } from "@/lib/db";
+import { projectGithubStats } from "@/lib/github";
 import { latestSnapshotsByTokenIds } from "@/lib/market";
 
 export type ProjectFilters = {
@@ -196,6 +197,7 @@ export async function getProjectBySlug(slug: string) {
     currentToken: current,
     market: current?.latestMarket ?? null,
     repositories: repoRows,
+    github: await projectGithubStats(project.id),
     evidence: evidenceRows,
     notes: noteRows,
     events: eventRows,
