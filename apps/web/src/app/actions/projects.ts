@@ -2,6 +2,7 @@
 
 import {
   ACTIVITY_SIGNAL_TYPES,
+  DISCOVERY_TIERS,
   isLikelyEvmAddress,
   SCORE_DIMENSIONS,
   slugify,
@@ -105,6 +106,9 @@ export async function createProjectAction(formData: FormData) {
       shortDescription: optStr(formData, "shortDescription"),
       longDescription: optStr(formData, "longDescription"),
       projectStatus,
+      discoveryTier: str(formData, "discoveryTier") || "under_the_radar",
+      trackingReason: optStr(formData, "trackingReason"),
+      researchContext: optStr(formData, "researchContext"),
       primaryCategory: optStr(formData, "primaryCategory"),
       websiteUrl: optStr(formData, "websiteUrl"),
       twitterUrl: optStr(formData, "twitterUrl"),
@@ -223,6 +227,9 @@ export async function updateProjectAction(formData: FormData) {
       shortDescription: optStr(formData, "shortDescription"),
       longDescription: optStr(formData, "longDescription"),
       projectStatus: str(formData, "projectStatus") || "researching",
+      discoveryTier: str(formData, "discoveryTier") || "under_the_radar",
+      trackingReason: optStr(formData, "trackingReason"),
+      researchContext: optStr(formData, "researchContext"),
       primaryCategory: optStr(formData, "primaryCategory"),
       websiteUrl: optStr(formData, "websiteUrl"),
       twitterUrl: optStr(formData, "twitterUrl"),

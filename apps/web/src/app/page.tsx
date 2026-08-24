@@ -11,6 +11,7 @@ import { refreshAllMarketsAction } from "@/app/actions/market";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { FilterBar } from "@/components/FilterBar";
+import { WhyWriteupButton } from "@/components/WhyWriteup";
 
 export const dynamic = "force-dynamic";
 
@@ -102,13 +103,14 @@ export default async function HomePage({
               <th>Code</th>
               <th>Product</th>
               <th>Last meaningful</th>
+              <th>Why</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={14} className="py-10 text-center text-ink-500">
+                <td colSpan={15} className="py-10 text-center text-ink-500">
                   No projects yet.{" "}
                   <Link href="/projects/new" className="text-accent">
                     Add one
@@ -169,6 +171,20 @@ export default async function HomePage({
                     {p.lastMeaningfulBuild
                       ? new Date(p.lastMeaningfulBuild).toISOString().slice(0, 10)
                       : "—"}
+                  </td>
+                  <td>
+                    <WhyWriteupButton
+                      data={{
+                        name: p.name,
+                        slug: p.slug,
+                        discoveryTier: p.discoveryTier,
+                        projectStatus: p.projectStatus,
+                        shortDescription: p.shortDescription,
+                        trackingReason: p.trackingReason,
+                        researchContext: p.researchContext,
+                        tokenSymbol: p.currentToken?.symbol ?? null,
+                      }}
+                    />
                   </td>
                   <td>
                     <Link href={`/projects/${p.slug}`} className="font-mono text-[10px] uppercase text-accent">

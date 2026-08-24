@@ -1,0 +1,132 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useId, useState } from "react";
+
+export type WhyWriteupData = {
+  name: string;
+  slug: string;
+  discoveryTier: string | null;
+  projectStatus: string;
+  shortDescription: string | null;
+  trackingReason: string | null;
+  researchContext: string | null;
+  tokenSymbol?: string | null;
+};
+
+export function WhyWriteupBody({ data }: { data: WhyWriteupData }) {
+  const tier = (data.discoveryTier ?? "under_the_radar").replace(/_/g, " ");
+  const status = data.projectStatus.replace(/_/g, " ");
+
+  return (
+    <div className="space-y-4 text-sm leading-relaxed text-ink-300">
+      <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
+        <span className="rounded-sm border border-accent/40 bg-accent-muted px-1.5 py-0.5 text-accent">
+          {tier}
+        </span>
+        <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 text-ink-400">{status}</span>
+        {data.tokenSymbol ? (
+          <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 text-ink-400">
+            ${data.tokenSymbol}
+          </span>
+        ) : (
+          <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 text-ink-500">no token</span>
+        )}
+      </div>
+
+      {data.shortDescription ? (
+        <p className="text-ink-200">{data.shortDescription}</p>
+      ) : null}
+
+      <div>
+        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">Why on this list</h3>
+        <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
+          {data.trackingReason?.trim() || "No tracking reason recorded yet."}
+        </p>
+      </div>
+
+      <div>
+        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">Research framing</h3>
+        <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
+          {data.researchContext?.trim() || "No research context recorded yet."}
+        </p>
+      </div>
+
+      <p className="font-mono text-[10px] text-ink-600">
+        Discovery tier ≠ status. Tier is how we found / rank it; status is lifecycle (watch, migration,
+        dormant…).
+      </p>
+    </div>
+  );
+}
+
+export function WhyWriteupButton({ data }: { data: WhyWriteupData }) {
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="font-mono text-[10px] uppercase tracking-wider text-accent hover:underline"
+        onClick={() => setOpen(true)}
+      >
+        Why
+      </button>
+
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="panel max-h-[85vh] w-full max-w-lg overflow-y-auto border-ink-600 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 id={titleId} className="font-display text-2xl text-ink-100">
+                  {data.name}
+                </h2>
+                <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-500">
+                  Why this project is tracked
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+              >
+                Close
+              </button>
+            </div>
+
+            <WhyWriteupBody data={data} />
+
+            <div className="mt-6 flex gap-2 border-t border-ink-800 pt-4">
+              <Link href={`/projects/${data.slug}#why`} className="btn btn-primary" onClick={() => setOpen(false)}>
+                Full project page
+              </Link>
+              <button type="button" className="btn" onClick={() => setOpen(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}

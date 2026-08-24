@@ -55,12 +55,6 @@ export default async function ProjectDetailPage({
             <span className="font-mono text-xs text-ink-500">id {project.identityConfidence ?? 0}/10</span>
           </div>
           <p className="mt-2 max-w-2xl text-sm text-ink-400">{project.shortDescription}</p>
-          {project.trackingReason ? (
-            <p className="mt-2 max-w-2xl text-xs text-ink-500">
-              <span className="font-mono uppercase tracking-wider text-ink-600">Why tracked · </span>
-              {project.trackingReason}
-            </p>
-          ) : null}
           <div className="mt-3 flex flex-wrap gap-3 font-mono text-xs text-ink-400">
             {project.websiteUrl ? (
               <a href={project.websiteUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
@@ -109,6 +103,48 @@ export default async function ProjectDetailPage({
           </form>
         </div>
       </header>
+
+      {/* Why on this list — research write-up */}
+      <section id="why" className="panel scroll-mt-6 border-accent/20 p-5">
+        <h2 className="font-display text-xl text-ink-100">Why on this list</h2>
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-500">
+          Discovery framing · not a buy signal
+        </p>
+        <div className="mt-4 space-y-4 text-sm leading-relaxed">
+          <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
+            <span className="rounded-sm border border-accent/40 bg-accent-muted px-1.5 py-0.5 text-accent">
+              {(project.discoveryTier ?? "under_the_radar").replace(/_/g, " ")}
+            </span>
+            <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 text-ink-400">
+              {project.projectStatus.replace(/_/g, " ")}
+            </span>
+          </div>
+          <div>
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+              Why tracked
+            </h3>
+            <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
+              {project.trackingReason?.trim() || "No tracking reason recorded yet. Add one when editing."}
+            </p>
+          </div>
+          <div>
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+              Research framing
+            </h3>
+            <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
+              {project.researchContext?.trim() || "No research context recorded yet."}
+            </p>
+          </div>
+          {project.notes[0] ? (
+            <div>
+              <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+                Latest research note
+              </h3>
+              <p className="mt-1.5 whitespace-pre-wrap text-ink-300">{project.notes[0].body}</p>
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       {/* Market summary */}
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
