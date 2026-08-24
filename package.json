@@ -11,6 +11,7 @@
     "db:generate": "pnpm --filter @codexcap/db generate",
     "db:migrate": "pnpm --filter @codexcap/db migrate",
     "db:seed": "pnpm --filter @codexcap/db seed",
+    "db:seed:research": "pnpm --filter @codexcap/db seed:research",
     "db:studio": "pnpm --filter @codexcap/db studio",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm --filter @codexcap/core test"

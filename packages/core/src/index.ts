@@ -1,5 +1,13 @@
 /** Domain enums, recency helpers, slug utils — shared across web/worker/db. */
 
+export const DISCOVERY_TIERS = [
+  "under_the_radar",
+  "niche_known",
+  "established",
+  "benchmark",
+] as const;
+export type DiscoveryTier = (typeof DISCOVERY_TIERS)[number];
+
 export const PROJECT_STATUSES = [
   "candidate",
   "researching",

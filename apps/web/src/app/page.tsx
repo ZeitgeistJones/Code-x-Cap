@@ -82,6 +82,7 @@ export default async function HomePage({
           <thead>
             <tr>
               <th>Project</th>
+              <th>Discovery</th>
               <th>Category</th>
               <th>Status</th>
               <th>Token</th>
@@ -96,7 +97,7 @@ export default async function HomePage({
           <tbody>
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-10 text-center text-ink-500">
+                <td colSpan={11} className="py-10 text-center text-ink-500">
                   No projects yet.{" "}
                   <Link href="/projects/new" className="text-accent">
                     Add one
@@ -116,6 +117,9 @@ export default async function HomePage({
                         {p.shortDescription}
                       </div>
                     ) : null}
+                  </td>
+                  <td className="font-mono text-[10px] uppercase text-ink-400">
+                    {(p.discoveryTier ?? "—").replace(/_/g, " ")}
                   </td>
                   <td className="font-mono text-xs text-ink-400">
                     {(p.primaryCategory ?? "—").replace(/_/g, " ")}

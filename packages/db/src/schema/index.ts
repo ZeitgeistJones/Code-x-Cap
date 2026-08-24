@@ -33,6 +33,10 @@ export const projects = pgTable(
     shortDescription: text("short_description"),
     longDescription: text("long_description"),
     projectStatus: text("project_status").notNull().default("candidate"),
+    /** Separate from status: under_the_radar | niche_known | established | benchmark */
+    discoveryTier: text("discovery_tier").notNull().default("under_the_radar"),
+    trackingReason: text("tracking_reason"),
+    researchContext: text("research_context"),
     primaryCategory: text("primary_category"),
     websiteUrl: text("website_url"),
     twitterUrl: text("twitter_url"),

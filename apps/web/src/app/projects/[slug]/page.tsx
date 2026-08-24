@@ -47,9 +47,18 @@ export default async function ProjectDetailPage({
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-display text-3xl text-ink-100">{project.name}</h1>
             <StatusPill status={project.projectStatus} />
+            <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-400">
+              {(project.discoveryTier ?? "under_the_radar").replace(/_/g, " ")}
+            </span>
             <span className="font-mono text-xs text-ink-500">id {project.identityConfidence ?? 0}/10</span>
           </div>
           <p className="mt-2 max-w-2xl text-sm text-ink-400">{project.shortDescription}</p>
+          {project.trackingReason ? (
+            <p className="mt-2 max-w-2xl text-xs text-ink-500">
+              <span className="font-mono uppercase tracking-wider text-ink-600">Why tracked · </span>
+              {project.trackingReason}
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-3 font-mono text-xs text-ink-400">
             {project.websiteUrl ? (
               <a href={project.websiteUrl} target="_blank" rel="noreferrer" className="hover:text-accent">
