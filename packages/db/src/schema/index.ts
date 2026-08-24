@@ -40,6 +40,24 @@ export const projects = pgTable(
     writeup: text("writeup"),
     whatsHoldingBack: text("whats_holding_back"),
     whatToWatch: text("what_to_watch"),
+    /** How inspectable is current development: open_current | open_stale | public_snapshot_private_current | … */
+    buildVisibility: text("build_visibility").notNull().default("unknown"),
+    /** Manual research lane: very_high | high | medium | low | special_situation */
+    researchPriority: text("research_priority").notNull().default("medium"),
+    /** Biggest unresolved research question for this project */
+    researchQuestion: text("research_question"),
+    /** What evidence would change the current thesis */
+    whatWouldChangeThesis: text("what_would_change_thesis"),
+    /**
+     * Confidence that meaningful *external* adoption exists (0–10).
+     * Separate from product_reality — a live product can still have zero external users.
+     */
+    adoptionConfidence: integer("adoption_confidence").default(0),
+    /**
+     * Default framing for usage/onchain metrics on this project:
+     * external_verified | mixed | project_operated | unknown
+     */
+    activityOrigin: text("activity_origin").notNull().default("unknown"),
     primaryCategory: text("primary_category"),
     websiteUrl: text("website_url"),
     twitterUrl: text("twitter_url"),
@@ -261,6 +279,8 @@ export const activitySignals = pgTable(
     source: text("source"),
     confidence: integer("confidence").default(5),
     summary: text("summary"),
+    /** Who generated this signal: external_verified | mixed | project_operated | unknown */
+    activityOrigin: text("activity_origin").notNull().default("unknown"),
     ...timestamps,
   },
   (t) => [uniqueIndex("activity_signals_project_type_uidx").on(t.projectId, t.signalType)],

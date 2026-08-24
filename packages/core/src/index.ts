@@ -10,6 +10,35 @@ export const DISCOVERY_TIERS = [
 ] as const;
 export type DiscoveryTier = (typeof DISCOVERY_TIERS)[number];
 
+/** Public code recency ≠ project activity — track build inspectability separately. */
+export const BUILD_VISIBILITIES = [
+  "open_current",
+  "open_stale",
+  "public_snapshot_private_current",
+  "integration_public_core_private",
+  "closed_private",
+  "unknown",
+] as const;
+export type BuildVisibility = (typeof BUILD_VISIBILITIES)[number];
+
+export const RESEARCH_PRIORITIES = [
+  "very_high",
+  "high",
+  "medium",
+  "low",
+  "special_situation",
+] as const;
+export type ResearchPriority = (typeof RESEARCH_PRIORITIES)[number];
+
+/** Prevent treating project-operated bots as external customers. */
+export const ACTIVITY_ORIGINS = [
+  "external_verified",
+  "mixed",
+  "project_operated",
+  "unknown",
+] as const;
+export type ActivityOrigin = (typeof ACTIVITY_ORIGINS)[number];
+
 export const PROJECT_STATUSES = [
   "candidate",
   "researching",

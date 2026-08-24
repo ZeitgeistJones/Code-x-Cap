@@ -145,6 +145,20 @@ export async function listProjects(filters: ProjectFilters = {}) {
     result = result.filter((p) => p.tokens.length === 0 || p.projectStatus === "pre_token");
   }
 
+  const priorityRank: Record<string, number> = {
+    very_high: 0,
+    high: 1,
+    special_situation: 2,
+    medium: 3,
+    low: 4,
+  };
+  result.sort((a, b) => {
+    const pa = priorityRank[a.researchPriority ?? "medium"] ?? 3;
+    const pb = priorityRank[b.researchPriority ?? "medium"] ?? 3;
+    if (pa !== pb) return pa - pb;
+    return (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0);
+  });
+
   return result;
 }
 

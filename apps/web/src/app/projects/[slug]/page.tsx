@@ -112,11 +112,11 @@ export default async function ProjectDetailPage({
         </div>
       </header>
 
-      {/* Why interesting / holding back / watch */}
+      {/* Living research write-up */}
       <section id="why" className="panel scroll-mt-6 border-accent/20 p-5">
         <h2 className="font-display text-xl text-ink-100">Research write-up</h2>
         <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-500">
-          Discovery framing · not a buy signal
+          Living research · not a buy signal
         </p>
         <div className="mt-4 space-y-5 text-sm leading-relaxed">
           <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
@@ -126,7 +126,17 @@ export default async function ProjectDetailPage({
             <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 text-ink-400">
               {project.projectStatus.replace(/_/g, " ")}
             </span>
+            <span className="rounded-sm border border-[color:var(--warn)]/40 px-1.5 py-0.5 text-warn">
+              {(project.buildVisibility ?? "unknown").replace(/_/g, " ")}
+            </span>
+            <span className="rounded-sm border border-ink-600 px-1.5 py-0.5 text-ink-400">
+              {(project.researchPriority ?? "medium").replace(/_/g, " ")}
+            </span>
+            <span className="rounded-sm border border-ink-700 px-1.5 py-0.5 text-ink-500">
+              adoption {project.adoptionConfidence ?? 0}/10
+            </span>
           </div>
+
           <div>
             <h3 className="font-mono text-[10px] uppercase tracking-widest text-accent">
               Why it&apos;s interesting
@@ -137,6 +147,7 @@ export default async function ProjectDetailPage({
                 "No write-up recorded yet. Add one when editing."}
             </p>
           </div>
+
           <div>
             <h3 className="font-mono text-[10px] uppercase tracking-widest text-warn">
               What&apos;s holding it back
@@ -145,6 +156,25 @@ export default async function ProjectDetailPage({
               {project.whatsHoldingBack?.trim() || "Not recorded yet."}
             </p>
           </div>
+
+          <div className="rounded-sm border border-ink-700 bg-ink-950/40 p-3">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-100">
+              Biggest unanswered question
+            </h3>
+            <p className="mt-1.5 whitespace-pre-wrap text-ink-100">
+              {project.researchQuestion?.trim() || "Not recorded yet."}
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
+              What would change the thesis
+            </h3>
+            <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
+              {project.whatWouldChangeThesis?.trim() || "Not recorded yet."}
+            </p>
+          </div>
+
           <div>
             <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
               What to watch
@@ -153,26 +183,12 @@ export default async function ProjectDetailPage({
               {project.whatToWatch?.trim() || "Not recorded yet."}
             </p>
           </div>
-          {project.researchContext?.trim() ? (
-            <div>
-              <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-                Research framing
-              </h3>
-              <p className="mt-1.5 whitespace-pre-wrap text-ink-400">
-                {project.researchContext.trim()}
-              </p>
-            </div>
-          ) : null}
-          {project.trackingReason?.trim() && project.writeup?.trim() ? (
-            <div>
-              <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-                Tracking reason
-              </h3>
-              <p className="mt-1.5 whitespace-pre-wrap text-ink-400">
-                {project.trackingReason.trim()}
-              </p>
-            </div>
-          ) : null}
+
+          <p className="font-mono text-[10px] text-ink-600">
+            Public code recency ≠ project activity. Activity origin:{" "}
+            {(project.activityOrigin ?? "unknown").replace(/_/g, " ")}. Stale open source can still mean
+            private current development — that lowers build visibility, not automatic dormancy.
+          </p>
         </div>
       </section>
 

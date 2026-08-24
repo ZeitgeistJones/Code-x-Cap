@@ -28,6 +28,23 @@ export async function ensureDiscoveryColumns(db: ReturnType<typeof createDb>) {
   await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "writeup" text`);
   await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "whats_holding_back" text`);
   await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "what_to_watch" text`);
+  await db.execute(
+    sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "build_visibility" text DEFAULT 'unknown' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "research_priority" text DEFAULT 'medium' NOT NULL`,
+  );
+  await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "research_question" text`);
+  await db.execute(sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "what_would_change_thesis" text`);
+  await db.execute(
+    sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "adoption_confidence" integer DEFAULT 0`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "activity_origin" text DEFAULT 'unknown' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "activity_signals" ADD COLUMN IF NOT EXISTS "activity_origin" text DEFAULT 'unknown' NOT NULL`,
+  );
 }
 
 type SeedRepo = { owner: string; repo: string; role: string };
@@ -59,7 +76,15 @@ export type SeedProject = {
   whatToWatch: string;
   trackingReason: string;
   researchContext: string;
+  buildVisibility?: string;
+  researchPriority?: string;
+  researchQuestion?: string | null;
+  whatWouldChangeThesis?: string | null;
+  adoptionConfidence?: number;
+  activityOrigin?: string;
   evidence: SeedEvidence[];
+  /** Optional high-severity watch rule (e.g. MAIN first LP) */
+  alertRule?: { title: string; description: string; dedupeKey: string } | null;
 };
 
 const EXTRA_TAGS: Array<{ slug: string; name: string; group: string }> = [
@@ -155,30 +180,44 @@ const SEED: SeedProject[] = [
       status: "deployed_no_market",
       sourceUrl: "https://github.com/philpof102-svg/mainstreet",
     },
-    writeup: `MainStreet is one of the more interesting pre-market projects discovered during research because the development signal exists before a functioning token market does. The project is building an onchain trust and reputation layer for autonomous agents. It combines ERC-8004 identity/reputation data, x402 settlements and other agent activity into reputation signals that can theoretically be consumed by other agents before deciding whether to interact with another autonomous service.
+    buildVisibility: "open_current",
+    researchPriority: "very_high",
+    researchQuestion: "Will the builder connect MAIN to the already-live product?",
+    whatWouldChangeThesis:
+      "First LP on the verified MAIN contract, plus a committed token-utility/economics link in SDK/API — without that, product can stay strong while MAIN stays irrelevant.",
+    adoptionConfidence: 2,
+    activityOrigin: "unknown",
+    writeup: `MainStreet now has verified substantive development inside the current activity window.
 
-The project has meaningful public development rather than only a landing page. During research the repository had substantial current work across the SDK, MCP schemas, oracle logic, publishing tests and contract-artifact validation.
+Recent work includes actual SDK and CLI behavior fixes rather than documentation-only changes.
 
-MAIN is unusual because the token already exists but was deliberately deployed without an initial liquidity pool. That makes MainStreet better classified as PRE-MARKET rather than PRE-TOKEN.
+The product currently includes infrastructure such as ERC-8004 identity/reputation, x402 settlement signals, agent reputation scoring, agent matching, vet-before-payment workflows, MCP tooling, hosted MCP, JS SDK, CLI, paid endpoints, Coinbase x402 Bazaar presence, and reputation/activity leaderboards.
 
-It may be especially valuable for CODE × CAP because the system could potentially detect the transition from "builder with deployed token but no market" to "first liquidity / first real price discovery."`,
-    whatsHoldingBack: `There is currently no meaningful token market, so there is no clean market valuation to compare with development activity.
+MAIN is intentionally unusual. The token already exists, but the builder deliberately launched it with fixed 1,000,000 supply, no additional mint, no admin/upgrade path, no initial LP, no airdrop, and no staking.
 
-The official repo explicitly described: no initial LP, no airdrop, no staking.
+Token utility has intentionally been deferred. This should be treated as PRE-MARKET, not as a failed or illiquid token.`,
+    whatsHoldingBack: `MAIN currently has no meaningful market and no defined economic role in the product.
 
-Token utility was also described as something to define separately rather than something deeply integrated into the current product.
+There is no confirmed promise that liquidity will be created, MAIN will gain utility, or MAIN will capture value from the reputation protocol.
 
-Therefore MAIN should not be treated as a tradable microcap yet.`,
-    whatToWatch: bullets(`* first liquidity pool
-* official token utility specification
-* token distribution changes
-* new DEX pool
-* first meaningful volume
-* continued substantive GitHub development
-* external integrations consuming MainStreet reputation data
-* ERC-8004 ecosystem adoption`),
+The product currently functions without requiring MAIN.`,
+    whatToWatch: bullets(`* CRITICAL: first LP created
+* CRITICAL: token utility specification committed
+* CRITICAL: token referenced in SDK/API economics
+* distribution changes
+* official TGE/market announcement
+* first meaningful trading volume
+* third-party integrations using MainStreet reputation
+* continued substantive GitHub activity`),
     trackingReason: "Potential opportunity to observe a real builder before meaningful token price discovery exists.",
-    researchContext: "Treat as a genuine discovery/watch candidate rather than a benchmark.",
+    researchContext:
+      "Treat as PRE-MARKET. High-priority alert if LP is detected for verified MAIN contract. Do not treat as failed/illiquid microcap.",
+    alertRule: {
+      title: "ALERT RULE · MAIN first liquidity",
+      description:
+        "High-priority if an LP is detected for MAIN 0xb3f9760f1f1e75ba01574d98b52e4455f19e93fe on Base. Pre-market → price discovery transition.",
+      dedupeKey: "alert-rule-main-first-lp",
+    },
     evidence: [
       { field: "github_identity", value: "Official project repository", sourceUrl: "https://github.com/philpof102-svg/mainstreet" },
       { field: "token_contract", value: "0xb3f9760f1f1e75ba01574d98b52e4455f19e93fe", sourceUrl: "https://github.com/philpof102-svg/mainstreet" },
@@ -207,36 +246,37 @@ Therefore MAIN should not be treated as a tradable microcap yet.`,
       status: "trading",
       sourceUrl: "https://agentbot.sh/",
     },
-    writeup: `Agentbot remains one of the cleaner low-cap builder candidates because there is an actual commercial product behind the token.
+    buildVisibility: "public_snapshot_private_current",
+    researchPriority: "high",
+    researchQuestion: "Is Agentbot gaining paying users even though current production code is private?",
+    whatWouldChangeThesis:
+      "Evidence of paying hosted-agent customers / active deployments, or a public mirror sync that shows ongoing substantive production work.",
+    adoptionConfidence: 3,
+    activityOrigin: "unknown",
+    writeup: `Agentbot remains a legitimate commercial product.
 
-The platform offers managed AI-agent hosting rather than only issuing a speculative agent token. Its public repository contains substantially more than token contracts or documentation. It includes application code, backend infrastructure, an x402 gateway, Solidity contracts, relay infrastructure, monitoring systems, skills and deployment tooling.
+It offers paid hosted-agent plans and appears to have built substantial production infrastructure around always-on agents, Telegram, Discord, WhatsApp, Docker isolation, persistent servers, skills, automations, monitoring, x402, USDC payments, and agent-to-agent functionality.
 
-The official website has advertised paid hosting plans, giving Agentbot an actual business model independent of token speculation.
+The product/business evidence is much stronger than a typical microcap agent project.
 
-The identity chain is also unusually strong: the official product site publishes the exact Base token contract and the public repository identifies itself as the open-source mirror of the production system.
+However, public GitHub freshness is weaker than initially hoped. The official open-source repository is a mirror of private production development. Its most recent public mirror activity falls outside the strict 30-day public-code window.`,
+    whatsHoldingBack: `CODE × CAP cannot directly inspect the current production development.
 
-This makes Agentbot one of the better examples of the CODE × CAP thesis: small token valuation + real product + meaningful technical implementation.`,
-    whatsHoldingBack: `The biggest problem is development transparency.
+This means real product activity may be current while publicly measurable development momentum appears stale.
 
-The public repository describes itself as a mirror synchronized from a private production repository. This means public GitHub commit counts may not accurately measure the development effort.
-
-That creates an awkward situation for CODE × CAP: the product may be actively developed, but the most important development may occur privately.
-
-The public mirror historically contained only a small number of snapshot-style commits despite containing substantial code.
-
-External adoption also needs stronger verification beyond the existence of the paid product.`,
-    whatToWatch: bullets(`* new public mirror updates
-* size and substance of mirror changes
+External customer adoption also remains poorly quantified.`,
+    whatToWatch: bullets(`* next public mirror sync
+* size of mirror changes
+* paid-plan traction
+* active deployments
+* x402 settlements
+* customer counts
+* new integrations
 * package releases
-* customer/product usage indicators
-* x402 activity
-* hosting deployments
-* new skills/integrations
-* market liquidity
-* whether public development becomes more transparent`),
-    trackingReason: "One of the stronger true microcap builder candidates found.",
+* product changelog`),
+    trackingReason: "Strong commercial-product candidate; public-code momentum is a mirror lag problem, not proof of dormancy.",
     researchContext:
-      "Do not penalize raw public commit count without considering the production-mirror structure, but do lower confidence in development momentum when fresh public evidence cannot be independently inspected.",
+      "build_visibility=public_snapshot_private_current. Do not label dormant solely because the public mirror is stale.",
     evidence: [
       { field: "website_identity", value: "Official Agentbot website", sourceUrl: "https://agentbot.sh/" },
       { field: "token_contract", value: "0x986b41C76aB8B7350079613340ee692773B34bA3", sourceUrl: "https://agentbot.sh/" },
@@ -264,39 +304,41 @@ External adoption also needs stronger verification beyond the existence of the p
       status: "trading",
       sourceUrl: "https://mythosrouter.com/",
     },
-    writeup: `Mythos Router is one of the strongest unresolved CODE × CAP candidates found so far.
+    buildVisibility: "open_current",
+    researchPriority: "very_high",
+    researchQuestion: "Is MYTHOS actually being adopted outside the core developer?",
+    whatWouldChangeThesis:
+      "Independent adoption signals: npm/package downloads, external MCP integrations, non-core contributors/PRs, plus healthier liquidity/volume so the tiny mcap is not an artifact of no trading.",
+    adoptionConfidence: 2,
+    activityOrigin: "unknown",
+    writeup: `The main GitHub freshness concern is now substantially resolved.
 
-Unlike many agent tokens whose product is essentially a chatbot wrapper, Mythos is building tooling around the difficult problem of allowing AI coding agents to modify local systems safely and verifiably.
+MYTHOS has genuine substantive public development inside the current activity window. Recent history includes actual feature work around model routing and new model/provider support, not only dependency bumps or README changes.
 
-Its architecture includes concepts such as Strict Write Discipline, filesystem verification, tamper-evident receipts, persistent state/memory, MCP support, rollback/safety behavior and multi-provider routing.
+The repository is a large, mature implementation containing Strict Write Discipline, atomic writes, crash recovery, transaction journals, rollback, MCP server, CI verification, filesystem/security policies, tamper-evident receipts, persistent memory, SDK integrations, and multi-provider routing.
 
-The public repository is substantial, with hundreds of commits and significant actual implementation.
+The project also has significant GitHub visibility, including hundreds of stars and 100+ forks.
 
-Both the official website and repository have published the same Base MYTHOS contract, giving it a strong identity chain.
+This means MYTHOS should now score strongly on Build Substance, Development Momentum, and Identity Confidence.`,
+    whatsHoldingBack: `The main weakness is no longer code freshness.
 
-The project has also historically traded at the kind of valuation CODE × CAP is designed to investigate: tens of thousands of dollars rather than millions.`,
-    whatsHoldingBack: `The major unresolved issue is development recency.
+The biggest unanswered questions are: (1) Does the product have meaningful real-world adoption? (2) Is the current token market healthy enough to matter?
 
-During research, GitHub repository metadata indicated August activity, but some indexed commit-history and changelog views appeared stale.
-
-Therefore CODE × CAP should not simply interpret "repository updated August 20" as "substantive source code shipped August 20."
-
-This needs deterministic commit ingestion and changed-file analysis.
-
-Market quality has also been weak. Even when market cap appeared interesting, trading volume was extremely small.`,
-    whatToWatch: bullets(`* verify exact August commit activity
-* classify August changes as code vs docs/metadata
-* liquidity changes
-* daily trading volume
-* release activity
-* MCP adoption
-* external users/integrations
-* developer activity continuing into September
-* repo velocity relative to market valuation`),
+During research the token market was extremely thin despite its low market cap. Very low volume can make a tiny market cap misleading.`,
+    whatToWatch: bullets(`* npm/package downloads
+* external repositories integrating Mythos
+* third-party MCP usage
+* new external contributors
+* issues/PRs from non-core developers
+* GitHub fork activity quality
+* releases
+* liquidity
+* 24h volume
+* continued substantive commits`),
     trackingReason:
-      "Potentially the cleanest combination of real open-source engineering and very small Base market valuation.",
+      "Top research priority: strong open current build + tiny Base valuation; adoption and market quality are the open questions.",
     researchContext:
-      "High-priority full diligence candidate. Do not promote to PASS until recent substantive development is confirmed.",
+      "Research order #1. Shift diligence toward external adoption, not another GitHub freshness pass.",
     evidence: [
       { field: "website_identity", value: "Official project website", sourceUrl: "https://mythosrouter.com/" },
       { field: "github_identity", value: "Canonical Mythos Router repository", sourceUrl: "https://github.com/thewaltero/mythos-router" },
@@ -326,35 +368,42 @@ Market quality has also been weak. Even when market cap appeared interesting, tr
       status: "trading",
       sourceUrl: "https://hivra.cloud/token",
     },
-    writeup: `Hivra began as HermesOS, a managed hosting environment for Nous Research's Hermes Agent, and has since broadened into infrastructure for running persistent AI workers without requiring users to manage their own VPS, containers or deployment stack.
+    buildVisibility: "closed_private",
+    researchPriority: "high",
+    researchQuestion: "How many people actually pay for and use Hivra?",
+    whatWouldChangeThesis:
+      "Verified paying-customer / deployment / MRR / HermesOS payment-volume evidence. Burns going live would strengthen token linkage but adoption is the primary unknown.",
+    adoptionConfidence: 2,
+    activityOrigin: "unknown",
+    writeup: `Token utility is more mature than previously recorded. Some HermesOS utility is live today.
 
-The project is interesting because it has a much more concrete consumer/business product than many agent tokens.
+Holding HermesOS can be used to qualify for higher Hivra platform tiers. Users can also pay for annual Pro/Power access using HermesOS.
 
-Hermes Agent and Claude Code deployments have been part of the product, with additional coding/agent environments planned.
+Hivra is therefore not merely promising future token utility. The platform itself is a real hosted-agent product supporting persistent AI workers such as Hermes Agent and Claude Code, with broader worker support planned.
 
-The token story is also unusual. According to official project documentation, the team did not initially create the HermesOS token as a traditional project launch. A community member fair-launched it through Bankr, and the project later adopted it as the official ecosystem token.
+The HermesOS → Hivra transition did NOT involve a token migration. Same token. Same contract. Same ecosystem.`,
+    whatsHoldingBack: `The main weaknesses are:
 
-The Hivra rebrand did NOT create a new token. HermesOS remains the token associated with the ecosystem.
+1. Hivra-owned core development is not transparently open source.
+2. We cannot count Nous Research's Hermes Agent development as Hivra development.
+3. Actual customer traction remains poorly verified.
+4. Token burns are NOT live yet.
+5. Broader builder/operator/agent-payment functionality remains roadmap.
 
-Some token utility is already connected to the platform, including account/tier access and annual payments.`,
-    whatsHoldingBack: `Public code transparency is much weaker than projects such as Mythos or STARKBOT.
-
-The underlying Hermes Agent itself is open source, but Nous Research's Hermes Agent development cannot be counted as Hivra development.
-
-CODE × CAP therefore needs to separate "technology Hivra hosts" from "technology Hivra itself built."
-
-Some of the more attractive token-economic mechanisms, such as burns and broader builder/operator settlement, have also been described as future functionality rather than fully live systems.`,
-    whatToWatch: bullets(`* public Hivra repositories
-* platform releases
-* new supported agent environments
-* actual HermesOS payment volume
-* token burns becoming live
-* user/deployment counts
-* recurring revenue indicators
-* token utility expansion
-* package releases`),
-    trackingReason: "One of the strongest actual products inside the revised ≤$300K universe.",
-    researchContext: "Former name HermesOS. Do not create separate Hivra and HermesOS project entities.",
+Unknown: paying customer count, active deployments, MRR, retention, HermesOS payment volume.`,
+    whatToWatch: bullets(`* active deployments
+* platform usage counters
+* paying users
+* token payment transactions
+* burn mechanism going live
+* actual burns
+* new supported agent runtimes
+* builder marketplace launch
+* public Hivra repositories
+* recurring revenue signals`),
+    trackingReason: "Strong real product + live token utility; adoption metrics are the research gap.",
+    researchContext:
+      "Former name HermesOS. Same token/contract. build_visibility=closed_private. Research order #3.",
     evidence: [
       { field: "identity", value: "Official Hivra transition explanation", sourceUrl: "https://hivra.cloud/why-hivra" },
       { field: "token_contract", value: "0x95ccfD2B81A9667b0Cc979992632F98fc853EBa3", sourceUrl: "https://hivra.cloud/token" },
@@ -386,34 +435,37 @@ Some of the more attractive token-economic mechanisms, such as burns and broader
       status: "trading",
       sourceUrl: "https://github.com/deluonchain/deluskill",
     },
-    writeup: `DELU is one of the more interesting projects admitted after expanding the screen from $100K to $300K.
+    buildVisibility: "public_snapshot_private_current",
+    researchPriority: "high",
+    researchQuestion: "Are independent agents actually paying DELU for cognition?",
+    whatWouldChangeThesis:
+      "Unique external x402 purchasers / third-party agents paying in DELU — not just project-operated wallet loops using its own infrastructure.",
+    adoptionConfidence: 2,
+    activityOrigin: "mixed",
+    writeup: `DELU's historical public implementation is considerably more substantial than originally appreciated.
 
-The project is centered around an autonomous trading/research agent that continuously analyzes markets, executes strategies and exposes parts of its cognition through paid x402 APIs.
+The public core contains hundreds of commits and architecture including autonomous Base treasury, recurring research cycles, multiple parallel research loops, thousands of backtests, self-funded compute, Checkr x402 purchases, GeckoTerminal, Alchemy, Bankr execution, Venice private reasoning, rug filtering, ATR stops, Kelly sizing, live wallet activity, and public decision/trade records.
 
-The agent architecture is significantly closer to the "machine economy" thesis than many simple AI-token projects because the agent can theoretically earn money, pay for resources and expose its own services.
+DELU also has unusually concrete token utility: its cognition endpoint can charge directly in DELU through x402, with token-holder discounts/free tiers.
 
-The public DELU skill also implements token-denominated API access rather than attaching the token solely for speculation.
+However, the public core repo was intentionally locked after its build/submission period. The integration repo continued later but still falls outside the current strict code-freshness window.
 
-The same builder ecosystem overlaps with Checkr, making the combination particularly interesting: Checkr provides attention intelligence while DELU consumes market/research information and performs autonomous analysis/execution.`,
-    whatsHoldingBack: `The main weakness is public development recency.
+Therefore DELU should NOT be classified simply as dormant. Instead: PRODUCT ACTIVE / PUBLIC CORE STALE.`,
+    whatsHoldingBack: `The current product may be operating, but current development cannot be adequately inspected through public GitHub.
 
-Our previous investigation found that the key public DELU repositories did not satisfy the strict post-July-24 substantive-code requirement.
-
-The product may still be live while development occurs privately, but that weakens the core CODE × CAP thesis when we are specifically using public builder activity as the signal.
-
-It is also important to distinguish DELU token trading from actual third-party usage of DELU's cognition/API services.`,
-    whatToWatch: bullets(`* fresh public commits
-* API calls
-* x402 settlement activity
-* third-party consumers
-* token-denominated API usage
-* autonomous trading wallet activity
-* new integrations
-* market liquidity
-* new public repos`),
-    trackingReason:
-      "Interesting autonomous-agent economy project with real token utility, but insufficient fresh public-code evidence.",
-    researchContext: "Known niche project; verify public-code recency via GitHub ingest before ranking highly.",
+We also need to distinguish product usage from self-operated activity. A developer-controlled agent repeatedly using its own infrastructure does not prove external adoption.`,
+    whatToWatch: bullets(`* paid cognition calls
+* unique x402 purchasers
+* third-party agents using DELU
+* DELU-denominated payments
+* autonomous wallet activity
+* external integrations
+* new public repository
+* repo reopening
+* new skill releases`),
+    trackingReason: "Product active / public core stale — adoption origin matters more than raw call counts.",
+    researchContext:
+      "build_visibility=public_snapshot_private_current. Tag activity_origin carefully — project_operated ≠ external_verified.",
     evidence: [
       { field: "token_contract", value: "0x7b0ee9dcb5c1d4d7cd630c652959951936512ba3", sourceUrl: "https://github.com/deluonchain/deluskill" },
       { field: "product", value: "Ask The Quant", sourceUrl: "https://www.askthequant.com/" },
@@ -442,34 +494,37 @@ It is also important to distinguish DELU token trading from actual third-party u
       status: "trading",
       sourceUrl: "https://x.com/checkrsocial",
     },
-    writeup: `Checkr is one of the more convincing products among the low-cap agent ecosystem.
+    buildVisibility: "integration_public_core_private",
+    researchPriority: "high",
+    researchQuestion: "Is Checkr becoming an actual paid machine-data business?",
+    whatWouldChangeThesis:
+      "Fresh evidence of paid x402 demand: paid calls 7d/30d, unique API buyers, unique agent consumers, API revenue — not just product existence.",
+    adoptionConfidence: 3,
+    activityOrigin: "unknown",
+    writeup: `Checkr remains a legitimate active attention-intelligence product.
 
-Rather than trying to be another autonomous chatbot, Checkr specializes in attention intelligence for Base tokens.
+Its current functionality includes token attention leaderboard, signal radar, token profiles, creator intelligence, attention rotation, Hawkes-model-based attention analysis, x402 paid APIs, and Base-token monitoring.
 
-Its product analyzes signals such as mention velocity, creator activity, attention rotation, token-level social activity and temporal/attention dynamics.
+However, the valuable signal-generation backend is intentionally not exposed in the public repository. The public repository is primarily the integration/API/skill layer. Earlier commits explicitly removed internal signal-interpretation modules from public distribution.
 
-The service exposes these signals through APIs and x402-paid endpoints. That means there is at least a clear product that another agent could consume programmatically.
+The most recent public repository activity also falls outside the current strict 30-day code window.`,
+    whatsHoldingBack: `The strongest part of Checkr's technology is private.
 
-Checkr is already reasonably known inside the Base/Bankr agent niche, so it should not be presented as an unknown discovery. It is included because it is a useful example of a legitimate small-token data business.`,
-    whatsHoldingBack: `The most valuable signal-generation backend is not publicly inspectable.
+Therefore CODE × CAP can verify product, API, and integration surface — but cannot independently inspect core signal-generation logic or current backend development velocity.
 
-The public checkr-skill repository primarily exposes the API/integration surface rather than the core intelligence engine.
-
-During prior diligence, the public repository also failed the strict July-24 recency requirement.
-
-Therefore: active product ≠ active public-code signal. This distinction should be visible in CODE × CAP.`,
-    whatToWatch: bullets(`* new public repositories
-* backend open-sourcing
-* substantive skill/API changes
-* x402 call growth
-* endpoint usage
-* new tokens/signals covered
-* external agent integrations
-* market liquidity
-* developer releases`),
-    trackingReason:
-      "Known niche project with a real product and small token, useful for comparing product activity against public-code activity.",
-    researchContext: "Do not surface as a newly discovered alpha project.",
+The other unresolved issue is usage. We need fresh evidence of actual paid x402 consumption.`,
+    whatToWatch: bullets(`* paid calls last 7d
+* paid calls last 30d
+* unique API buyers
+* unique agent consumers
+* API revenue
+* new tokens covered
+* third-party integrations
+* new public repos
+* substantive skill updates`),
+    trackingReason: "Known niche paid-data product; next research is paid demand, not more GitHub.",
+    researchContext:
+      "build_visibility=integration_public_core_private. Do not surface as newly discovered alpha.",
     evidence: [
       { field: "github_identity", value: "Public Checkr repository", sourceUrl: "https://github.com/checkrsocial/checkr-skill" },
       { field: "website", value: "Official product", sourceUrl: "https://checkr.social/" },
@@ -501,41 +556,36 @@ Therefore: active product ≠ active public-code signal. This distinction should
       status: "migration_pending",
       sourceUrl: "https://github.com/madebyshun/blue-agent",
     },
-    writeup: `Blue Agent was one of the clearest examples encountered of genuine active development.
+    buildVisibility: "open_current",
+    researchPriority: "special_situation",
+    researchQuestion: "What does the new BLUEAGENT token actually represent after migration?",
+    whatWouldChangeThesis:
+      "Migration complete with published new CA, supply, allocations, LP depth, utility, and treatment of unpledged old tokens — until then do not rank old-token mcap normally.",
+    adoptionConfidence: 2,
+    activityOrigin: "unknown",
+    writeup: `Blue Agent easily passes the current-development requirement.
 
-The project contains a substantial founder console, agent tooling, x402 infrastructure, SDK/CLI functionality and a marketplace of pay-per-call AI tools.
+Recent public development includes substantial work around relaunch pledge system, migration ledger, public pledge records, non-pledger disclosures, Merkle distributor, deterministic Merkle builder, claim page, onchain claim dry-runs, price/archive systems, USDC credits, payment verification, and dozens of x402 tools.
 
-During research, individual August updates included large multi-file changes involving USDC credit systems, payment verification, migration tooling, Merkle claims, market/data infrastructure and other substantive functionality.
+The project is clearly actively building. However, much of the current work is specifically implementing a token migration/relaunch.`,
+    whatsHoldingBack: `The OLD BLUEAGENT token market cap should NOT be interpreted as the valuation of the current/future ecosystem.
 
-This clearly passes the "real builder" test.
+The migration changes the economics. Until the migration is complete we need to know: new contract, new supply, allocations, LP size, migration ratio, utility, and treatment of unpledged tokens.
 
-However, Blue Agent became a useful example of why CODE × CAP cannot simply compare current code quality to current token market cap.
-
-The project's token structure is undergoing a migration/relaunch.`,
-    whatsHoldingBack: `The current BLUEAGENT token is not a clean representation of the future project's token economy.
-
-Research found that the existing token was being migrated into a new token structure.
-
-Old tokens pledged into the migration were expected to be sold to help fund new liquidity, while holders would receive allocation in the new token.
-
-The developer also warned that unpledged old tokens could become illiquid.
-
-Additionally, BLUEAGENT credits were removed from at least one product flow and replaced with USDC/daily allowances.
-
-Therefore the old token's market cap cannot be compared directly with the quality of the current product.
-
-This is a SPECIAL SITUATION, not an ordinary microcap.`,
-    whatToWatch: bullets(`* exact new token contract
+The old token therefore cannot participate normally in CODE × CAP ranking.`,
+    whatToWatch: bullets(`* new CA published
+* new token deployment
+* migration deadline
 * migration completion
-* old-token liquidity removal
-* new LP creation
-* allocation mechanics
-* new supply
-* new token utility
-* whether product usage creates new-token demand
-* continuing August/September code activity`),
-    trackingReason: "Excellent active-builder testcase and migration/relaunch testcase.",
-    researchContext: "Known project. Do not surface as a fresh discovery.",
+* first new LP
+* liquidity depth
+* new circulating supply
+* new utility
+* old-token liquidity collapse
+* first post-migration usage`),
+    trackingReason: "Special situation / migration lane — excellent builder signal, unusable old-token valuation.",
+    researchContext:
+      "Do not rank BLUEAGENT normally until migration resolves. Separate from top research order #1–6.",
     evidence: [
       { field: "github", value: "madebyshun/blue-agent", sourceUrl: "https://github.com/madebyshun/blue-agent" },
       { field: "x402_repo", value: "blueagent-x402-services", sourceUrl: "https://github.com/madebyshun/blueagent-x402-services" },
@@ -559,6 +609,12 @@ This is a SPECIAL SITUATION, not an ordinary microcap.`,
     tagSlugs: ["mcp", "x402", "inheritance", "legal-tech", "api", "smart-contracts", "agent-infrastructure", "private-source"],
     repos: [],
     token: { symbol: "HEIR", ca: null, status: "unknown", sourceUrl: null },
+    buildVisibility: "closed_private",
+    researchPriority: "medium",
+    researchQuestion: "Can HEIR publish attributable public source or a verified CA while proving shipping continues?",
+    whatWouldChangeThesis: "Official CA from project-controlled source and/or a public core repository.",
+    adoptionConfidence: 1,
+    activityOrigin: "unknown",
     writeup: `HEIR stood out because current shipping could be verified even though current public source code could not.
 
 The project exposes a broader inheritance/estate-planning platform containing APIs, legal workflows, smart-contract creation and agent-facing tools.
@@ -611,6 +667,12 @@ The exact HEIR contract also should be independently verified from a current pro
       status: "trading",
       sourceUrl: "https://www.apinow.fun/token",
     },
+    buildVisibility: "unknown",
+    researchPriority: "medium",
+    researchQuestion: "How much API usage accrues to APINOW vs endpoint tokens, and how much is external?",
+    whatWouldChangeThesis: "Segmented usage (USDC vs APINOW vs endpoint tokens) with activity_origin tagged external_verified.",
+    adoptionConfidence: 3,
+    activityOrigin: "mixed",
     writeup: `APINow is particularly interesting from an agent-economy perspective.
 
 The platform allows agents to discover and call paid APIs using x402, creating a machine-native API marketplace.
@@ -665,6 +727,12 @@ Usage metrics need to be separated into USDC-paid calls, APINOW-linked activity,
       { owner: "BuiltByEcho", repo: "agent-brief", role: "sdk" },
     ],
     token: { symbol: "ECHO", ca: null, status: "unknown", sourceUrl: null },
+    buildVisibility: "open_stale",
+    researchPriority: "low",
+    researchQuestion: "Has BuiltByEcho resumed substantive public shipping, and what is the official ECHO CA?",
+    whatWouldChangeThesis: "Fresh substantive commits plus official CA from BuiltByEcho-controlled source.",
+    adoptionConfidence: 1,
+    activityOrigin: "unknown",
     writeup: `Echo is less a single-purpose agent and more of a builder ecosystem.
 
 The BuiltByEcho organization has produced multiple agent-oriented tools, including storage infrastructure, research/developer utilities and x402-native systems.
@@ -715,6 +783,12 @@ The exact Base token contract should therefore only be attached after confirming
       status: "trading",
       sourceUrl: "https://github.com/ethereumdegen/stark-bot",
     },
+    buildVisibility: "open_stale",
+    researchPriority: "low",
+    researchQuestion: "Will STARKBOT revive with substantive public commits, or remain a historical benchmark?",
+    whatWouldChangeThesis: "First new substantive commit / package release after the dormancy window.",
+    adoptionConfidence: 1,
+    activityOrigin: "unknown",
     writeup: `STARKBOT is one of the best examples discovered of why CODE × CAP needs separate BUILD SUBSTANCE and DEVELOPMENT MOMENTUM scores.
 
 The repository is enormous compared with most microcap-agent projects.
@@ -764,6 +838,12 @@ STARKBOT is a perfect example of: "excellent codebase, weak current builder sign
       { owner: "otonix-ai", repo: "agent", role: "experimental" },
     ],
     token: { symbol: "OTX", ca: null, status: "unknown", sourceUrl: null },
+    buildVisibility: "open_stale",
+    researchPriority: "low",
+    researchQuestion: "Is Otonix a dormant snapshot or an active private rebuild?",
+    whatWouldChangeThesis: "Fresh commits plus official OTX CA from Otonix-controlled source.",
+    adoptionConfidence: 0,
+    activityOrigin: "unknown",
     writeup: `Otonix has one of the more unusual autonomous-agent infrastructure concepts.
 
 Instead of focusing on trading or chat, it attempts to give autonomous agents control over the infrastructure they need to exist.
@@ -808,6 +888,12 @@ The exact current OTX contract should also be verified again from an official Ot
     tagSlugs: ["ai-agent", "polymarket", "trading", "telegram", "backend", "payments", "base", "dormant"],
     repos: [],
     token: { symbol: "ZER0", ca: null, status: "unknown", sourceUrl: null },
+    buildVisibility: "open_stale",
+    researchPriority: "low",
+    researchQuestion: "Any revival of public ZER0 repositories or product uptime?",
+    whatWouldChangeThesis: "Repo revival with substantive commits and verified CA.",
+    adoptionConfidence: 0,
+    activityOrigin: "unknown",
     writeup: `ZER0 was a good example of a token that initially looked much more interesting after inspecting its actual code.
 
 The public application repository had roughly 55 commits and contained legitimate product infrastructure including Supabase schema, asynchronous agent jobs, Polymarket integration, Telegram bot functionality, payments, trading routes, and backend/application logic.
@@ -853,6 +939,12 @@ The exact token CA should also be re-established through the identity pipeline b
       status: "low_liquidity",
       sourceUrl: "https://thesisonbase.com/docs.html",
     },
+    buildVisibility: "open_stale",
+    researchPriority: "low",
+    researchQuestion: "Is THESIS abandoned, or a revival candidate with restored liquidity and trading-wallet activity?",
+    whatWouldChangeThesis: "New GitHub commit plus restored liquidity / trading-wallet activity.",
+    adoptionConfidence: 1,
+    activityOrigin: "unknown",
     writeup: `THESIS was one of the most impressive projects encountered from a historical build perspective.
 
 Its system implemented an actual multi-agent investment workflow: X thesis submission → eligibility filtering → author analysis → token analysis → LLM committee judgment → position sizing → Base execution → TP/SL monitoring → realized-profit distribution.
@@ -901,6 +993,12 @@ THESIS is therefore a classic CODE × CAP false positive if recency is ignored.`
     tagSlugs: ["ai", "data", "x402", "base", "private-source", "watch"],
     repos: [],
     token: { symbol: "ARBUS", ca: null, status: "unknown", sourceUrl: null },
+    buildVisibility: "closed_private",
+    researchPriority: "low",
+    researchQuestion: "Will Arbus publish attributable public code or developer surfaces?",
+    whatWouldChangeThesis: "Official GitHub / SDK / package with clear attribution.",
+    adoptionConfidence: 1,
+    activityOrigin: "unknown",
     writeup: `Arbus appeared to be a legitimate Base AI/data product rather than a pure meme token.
 
 Its project identity and live product looked credible, and it fit the broader x402/agent-data ecosystem being researched.`,
@@ -935,6 +1033,12 @@ Market activity was also extremely thin during the original screen.`,
     tagSlugs: ["search", "research", "intelligence", "base", "low-liquidity", "private-source"],
     repos: [],
     token: { symbol: "SS", ca: null, status: "unknown", sourceUrl: null },
+    buildVisibility: "closed_private",
+    researchPriority: "low",
+    researchQuestion: "Any attributable public code or sustained liquidity for Sniper Search?",
+    whatWouldChangeThesis: "Official GitHub plus sustained volume — otherwise keep low priority.",
+    adoptionConfidence: 0,
+    activityOrigin: "unknown",
     writeup: `Sniper Search was confirmed as a real Base token/product rather than a ticker collision.
 
 The project fits the broader agent/search intelligence thesis and historically traded at a very small valuation.`,
@@ -967,6 +1071,12 @@ Therefore the low market cap does not currently provide a convincing "code versu
     tagSlugs: ["x402", "base", "rejected", "low-liquidity", "contract-risk"],
     repos: [],
     token: { symbol: "MIO", ca: null, status: "abandoned", sourceUrl: null },
+    buildVisibility: "unknown",
+    researchPriority: "low",
+    researchQuestion: "None unless meaningful liquidity and public development appear.",
+    whatWouldChangeThesis: "Meaningful liquidity + public development + resolved contract-control concerns.",
+    adoptionConfidence: 0,
+    activityOrigin: "unknown",
     writeup: `MIO is worth keeping primarily as a negative testcase for CODE × CAP.
 
 It surfaced in the right thematic ecosystem and existed on Base, demonstrating why simple token-directory discovery is insufficient.`,
@@ -1019,6 +1129,12 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
     writeup: p.writeup,
     whatsHoldingBack: p.whatsHoldingBack,
     whatToWatch: p.whatToWatch,
+    buildVisibility: p.buildVisibility ?? "unknown",
+    researchPriority: p.researchPriority ?? "medium",
+    researchQuestion: p.researchQuestion ?? null,
+    whatWouldChangeThesis: p.whatWouldChangeThesis ?? null,
+    adoptionConfidence: p.adoptionConfidence ?? 0,
+    activityOrigin: p.activityOrigin ?? "unknown",
     primaryCategory: p.category,
     websiteUrl: p.website ?? null,
     twitterUrl: p.twitter ?? null,
@@ -1155,13 +1271,29 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
       projectId,
       eventType: "manual_note",
       title: "Research seed pack imported/updated",
-      description: `discovery_tier=${p.discoveryTier}; status=${p.status}`,
+      description: `discovery_tier=${p.discoveryTier}; status=${p.status}; build_visibility=${p.buildVisibility ?? "unknown"}; priority=${p.researchPriority ?? "medium"}`,
       severity: "info",
       autoGenerated: false,
       confirmed: true,
-      dedupeKey: `research-seed-pack-v2-${p.slug}`,
+      dedupeKey: `research-seed-pack-v3-${p.slug}`,
     })
     .onConflictDoNothing();
+
+  if (p.alertRule) {
+    await db
+      .insert(events)
+      .values({
+        projectId,
+        eventType: "manual_note",
+        title: p.alertRule.title,
+        description: p.alertRule.description,
+        severity: "high",
+        autoGenerated: false,
+        confirmed: true,
+        dedupeKey: p.alertRule.dedupeKey,
+      })
+      .onConflictDoNothing();
+  }
 }
 
 export async function seedResearchProjects(connectionString?: string) {

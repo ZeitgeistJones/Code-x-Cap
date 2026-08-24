@@ -190,12 +190,18 @@ export default async function HomePage({
                         slug: p.slug,
                         discoveryTier: p.discoveryTier,
                         projectStatus: p.projectStatus,
+                        buildVisibility: p.buildVisibility,
+                        researchPriority: p.researchPriority,
                         shortDescription: p.shortDescription,
                         writeup: p.writeup,
                         whatsHoldingBack: p.whatsHoldingBack,
                         whatToWatch: p.whatToWatch,
+                        researchQuestion: p.researchQuestion,
+                        whatWouldChangeThesis: p.whatWouldChangeThesis,
                         trackingReason: p.trackingReason,
                         researchContext: p.researchContext,
+                        adoptionConfidence: p.adoptionConfidence,
+                        activityOrigin: p.activityOrigin,
                         tokenSymbol: p.currentToken?.symbol ?? null,
                       }}
                     />

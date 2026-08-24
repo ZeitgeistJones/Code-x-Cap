@@ -1,5 +1,13 @@
 import { notFound } from "next/navigation";
-import { CHAINS, DISCOVERY_TIERS, PRIMARY_CATEGORIES, PROJECT_STATUSES } from "@codexcap/core";
+import {
+  ACTIVITY_ORIGINS,
+  BUILD_VISIBILITIES,
+  CHAINS,
+  DISCOVERY_TIERS,
+  PRIMARY_CATEGORIES,
+  PROJECT_STATUSES,
+  RESEARCH_PRIORITIES,
+} from "@codexcap/core";
 import { updateProjectAction } from "@/app/actions/projects";
 import { getProjectBySlug, listAllTags } from "@/lib/queries";
 
@@ -69,6 +77,59 @@ export default async function EditProjectPage({
               ))}
             </select>
           </div>
+          <div>
+            <label className="label">Build visibility</label>
+            <select
+              className="input"
+              name="buildVisibility"
+              defaultValue={project.buildVisibility ?? "unknown"}
+            >
+              {BUILD_VISIBILITIES.map((v) => (
+                <option key={v} value={v}>
+                  {v.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Research priority</label>
+            <select
+              className="input"
+              name="researchPriority"
+              defaultValue={project.researchPriority ?? "medium"}
+            >
+              {RESEARCH_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Adoption confidence 0–10</label>
+            <input
+              className="input"
+              name="adoptionConfidence"
+              type="number"
+              min={0}
+              max={10}
+              defaultValue={String(project.adoptionConfidence ?? 0)}
+            />
+          </div>
+          <div>
+            <label className="label">Activity origin</label>
+            <select
+              className="input"
+              name="activityOrigin"
+              defaultValue={project.activityOrigin ?? "unknown"}
+            >
+              {ACTIVITY_ORIGINS.map((o) => (
+                <option key={o} value={o}>
+                  {o.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="sm:col-span-2">
             <label className="label">Why on this list (short)</label>
             <textarea
@@ -94,6 +155,24 @@ export default async function EditProjectPage({
               name="whatsHoldingBack"
               defaultValue={project.whatsHoldingBack ?? ""}
               placeholder="Risks, gaps, caveats…"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Biggest unanswered question</label>
+            <textarea
+              className="input min-h-[64px]"
+              name="researchQuestion"
+              defaultValue={project.researchQuestion ?? ""}
+              placeholder="The one question that would most change diligence…"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">What would change the thesis</label>
+            <textarea
+              className="input min-h-[72px]"
+              name="whatWouldChangeThesis"
+              defaultValue={project.whatWouldChangeThesis ?? ""}
+              placeholder="Evidence that would upgrade or kill the thesis…"
             />
           </div>
           <div className="sm:col-span-2">
