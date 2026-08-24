@@ -1,9 +1,10 @@
 /**
- * Fetch market data from GeckoTerminal and append market_snapshots rows.
- * Never invent numbers — null when GT has no pool/data.
+ * Fetch market data: GeckoTerminal primary, DexScreener fills gaps.
+ * Never invent numbers — null when no pool/data. No CA → skip.
  */
 
-import { geckoTerminal } from "@codexcap/connectors";
+import { dexScreener, geckoTerminal } from "@codexcap/connectors";
+import type { MarketSnapshotData, Provenance } from "@codexcap/connectors";
 import { activitySignals, marketSnapshots, tokens } from "@codexcap/db/schema";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -13,6 +14,48 @@ function toNumericString(n: number | null | undefined): string | null {
   return String(n);
 }
 
+function hasUsefulMarket(d: MarketSnapshotData | null | undefined): boolean {
+  if (!d) return false;
+  return d.marketCap != null || d.liquidityUsd != null || d.priceUsd != null || d.fdv != null;
+}
+
+function mergeMarket(
+  primary: (MarketSnapshotData & { provenance: Provenance }) | null,
+  fallback: (MarketSnapshotData & { provenance: Provenance }) | null,
+): (MarketSnapshotData & { provenance: Provenance }) | null {
+  if (!primary && !fallback) return null;
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+
+  const usedFallback =
+    (primary.marketCap == null && fallback.marketCap != null) ||
+    (primary.fdv == null && fallback.fdv != null) ||
+    (primary.liquidityUsd == null && fallback.liquidityUsd != null) ||
+    (primary.priceUsd == null && fallback.priceUsd != null) ||
+    (primary.volume24h == null && fallback.volume24h != null);
+
+  const providers = usedFallback
+    ? `${primary.provenance.provider}+${fallback.provenance.provider}`
+    : primary.provenance.provider;
+
+  return {
+    priceUsd: primary.priceUsd ?? fallback.priceUsd,
+    marketCap: primary.marketCap ?? fallback.marketCap,
+    fdv: primary.fdv ?? fallback.fdv,
+    liquidityUsd: primary.liquidityUsd ?? fallback.liquidityUsd,
+    volume24h: primary.volume24h ?? fallback.volume24h,
+    buys24h: primary.buys24h ?? fallback.buys24h,
+    sells24h: primary.sells24h ?? fallback.sells24h,
+    provenance: {
+      provider: providers,
+      sourceUrl: usedFallback
+        ? (fallback.provenance.sourceUrl ?? primary.provenance.sourceUrl)
+        : primary.provenance.sourceUrl,
+      fetchedAt: new Date(),
+    },
+  };
+}
+
 export type RefreshResult = {
   tokenId: string;
   symbol: string | null;
@@ -20,6 +63,7 @@ export type RefreshResult = {
   marketCap: number | null;
   liquidityUsd: number | null;
   volume24h: number | null;
+  source?: string;
   error?: string;
 };
 
@@ -50,8 +94,29 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
   }
 
   try {
-    const data = await geckoTerminal.getTokenMarket(token.chainId, token.contractAddress);
-    if (!data) {
+    let gt: Awaited<ReturnType<typeof geckoTerminal.getTokenMarket>> = null;
+    let ds: Awaited<ReturnType<typeof dexScreener.getTokenMarket>> = null;
+
+    try {
+      gt = await geckoTerminal.getTokenMarket(token.chainId, token.contractAddress);
+    } catch (e) {
+      console.warn("geckoterminal failed", token.symbol, e instanceof Error ? e.message : e);
+    }
+
+    // Always try DexScreener when GT is missing or thin on mcap/fdv/liquidity
+    const needsFallback =
+      !hasUsefulMarket(gt) || gt?.marketCap == null || gt?.liquidityUsd == null || gt?.fdv == null;
+
+    if (needsFallback) {
+      try {
+        ds = await dexScreener.getTokenMarket(token.chainId, token.contractAddress);
+      } catch (e) {
+        console.warn("dexscreener failed", token.symbol, e instanceof Error ? e.message : e);
+      }
+    }
+
+    const data = mergeMarket(gt, ds);
+    if (!data || !hasUsefulMarket(data)) {
       return {
         tokenId,
         symbol: token.symbol,
@@ -59,7 +124,7 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
         marketCap: null,
         liquidityUsd: null,
         volume24h: null,
-        error: "no data from provider",
+        error: "no pool/market data from geckoterminal or dexscreener",
       };
     }
 
@@ -71,11 +136,12 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
       fdv: toNumericString(data.fdv),
       liquidityUsd: toNumericString(data.liquidityUsd),
       volume24h: toNumericString(data.volume24h),
+      buys24h: data.buys24h ?? null,
+      sells24h: data.sells24h ?? null,
       source: data.provenance.provider,
       sourceUrl: data.provenance.sourceUrl ?? null,
     });
 
-    // Market activity signal
     const existing = await database
       .select()
       .from(activitySignals)
@@ -85,6 +151,7 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
     const summaryParts = [
       data.marketCap != null ? `mcap $${Math.round(data.marketCap).toLocaleString()}` : "mcap n/a",
       data.liquidityUsd != null ? `liq $${Math.round(data.liquidityUsd).toLocaleString()}` : "liq n/a",
+      data.provenance.provider,
     ];
     const signalValues = {
       latestAt: data.provenance.fetchedAt,
@@ -110,6 +177,7 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
       marketCap: data.marketCap,
       liquidityUsd: data.liquidityUsd,
       volume24h: data.volume24h,
+      source: data.provenance.provider,
     };
   } catch (e) {
     return {
@@ -134,8 +202,8 @@ export async function refreshAllCurrentTokenMarkets(): Promise<RefreshResult[]> 
   const results: RefreshResult[] = [];
   for (const t of rows) {
     results.push(await refreshTokenMarket(t.id));
-    // polite pacing for public GT API
-    await new Promise((r) => setTimeout(r, 400));
+    // polite pacing for public APIs
+    await new Promise((r) => setTimeout(r, 350));
   }
   return results;
 }
