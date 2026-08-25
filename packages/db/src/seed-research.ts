@@ -55,8 +55,18 @@ type SeedToken = {
   ca?: string | null;
   status: string;
   sourceUrl?: string | null;
+  /**
+   * verified = published by project-controlled source
+   * verified_market_identity = confirmed via listings/market identity (weaker than project-published)
+   */
+  caIdentity?: "verified" | "verified_market_identity";
 };
 type SeedEvidence = { field: string; value: string; sourceUrl: string };
+
+function normalizeCa(ca: string | null | undefined): string | null {
+  const v = ca?.trim().toLowerCase() || null;
+  return v || null;
+}
 
 export type SeedProject = {
   slug: string;
@@ -181,6 +191,7 @@ const SEED: SeedProject[] = [
       ca: "0xb3f9760f1f1e75ba01574d98b52e4455f19e93fe",
       status: "deployed_no_market",
       sourceUrl: "https://github.com/philpof102-svg/mainstreet",
+      caIdentity: "verified",
     },
     buildVisibility: "open_current",
     researchPriority: "very_high",
@@ -247,6 +258,7 @@ The product currently functions without requiring MAIN.`,
       ca: "0x986b41c76ab8b7350079613340ee692773b34ba3",
       status: "trading",
       sourceUrl: "https://agentbot.sh/",
+      caIdentity: "verified",
     },
     buildVisibility: "public_snapshot_private_current",
     researchPriority: "high",
@@ -305,6 +317,7 @@ External customer adoption also remains poorly quantified.`,
       ca: "0xb942b75a602fa318ac091370d93d9143ba345ba3",
       status: "trading",
       sourceUrl: "https://mythosrouter.com/",
+      caIdentity: "verified",
     },
     buildVisibility: "open_current",
     researchPriority: "very_high",
@@ -369,6 +382,7 @@ During research the token market was extremely thin despite its low market cap. 
       ca: "0x95ccfd2b81a9667b0cc979992632f98fc853eba3",
       status: "trading",
       sourceUrl: "https://hivra.cloud/token",
+      caIdentity: "verified",
     },
     buildVisibility: "closed_private",
     researchPriority: "high",
@@ -436,6 +450,7 @@ Unknown: paying customer count, active deployments, MRR, retention, HermesOS pay
       ca: "0x7b0ee9dcb5c1d4d7cd630c652959951936512ba3",
       status: "trading",
       sourceUrl: "https://github.com/deluonchain/deluskill",
+      caIdentity: "verified",
     },
     buildVisibility: "public_snapshot_private_current",
     researchPriority: "high",
@@ -495,6 +510,7 @@ We also need to distinguish product usage from self-operated activity. A develop
       ca: "0x2efac0a597a37050aafcf4bec627249d533dd9f8",
       status: "trading",
       sourceUrl: "https://x.com/checkrsocial",
+      caIdentity: "verified",
     },
     buildVisibility: "integration_public_core_private",
     researchPriority: "high",
@@ -532,6 +548,11 @@ The other unresolved issue is usage. We need fresh evidence of actual paid x402 
       { field: "website", value: "Official product", sourceUrl: "https://checkr.social/" },
       { field: "twitter", value: "Official account", sourceUrl: "https://x.com/checkrsocial" },
       { field: "api", value: "API documentation", sourceUrl: "https://api.checkr.social/docs" },
+      {
+        field: "token_contract",
+        value: "0x2efac0a597a37050aafcf4bec627249d533dd9f8",
+        sourceUrl: "https://x.com/checkrsocial",
+      },
     ],
   },
   {
@@ -557,6 +578,7 @@ The other unresolved issue is usage. We need fresh evidence of actual paid x402 
       ca: "0xf895783b2931c919955e18b5e3343e7c7c456ba3",
       status: "migration_pending",
       sourceUrl: "https://github.com/madebyshun/blue-agent",
+      caIdentity: "verified",
     },
     buildVisibility: "open_current",
     researchPriority: "special_situation",
@@ -587,12 +609,17 @@ The old token therefore cannot participate normally in CODE × CAP ranking.`,
 * first post-migration usage`),
     trackingReason: "Special situation / migration lane — excellent builder signal, unusable old-token valuation.",
     researchContext:
-      "Do not rank BLUEAGENT normally until migration resolves. Separate from top research order #1–6.",
+      "Do not rank BLUEAGENT normally until migration resolves. Separate from top research order #1–6. Legacy CA 0xf895783b… is preserved; when a new CA is announced, insert a NEW token row and link via migrationTargetTokenId — never overwrite the old CA.",
     evidence: [
       { field: "github", value: "madebyshun/blue-agent", sourceUrl: "https://github.com/madebyshun/blue-agent" },
       { field: "x402_repo", value: "blueagent-x402-services", sourceUrl: "https://github.com/madebyshun/blueagent-x402-services" },
       { field: "website", value: "Official site", sourceUrl: "https://blueagent.dev/" },
       { field: "twitter", value: "Official account", sourceUrl: "https://x.com/blueagent_" },
+      {
+        field: "token_contract",
+        value: "0xf895783b2931c919955e18b5e3343e7c7c456ba3 (legacy · migration_pending)",
+        sourceUrl: "https://github.com/madebyshun/blue-agent",
+      },
     ],
   },
   {
@@ -610,11 +637,17 @@ The old token therefore cannot participate normally in CODE × CAP ranking.`,
     identity: 8,
     tagSlugs: ["mcp", "x402", "inheritance", "legal-tech", "api", "smart-contracts", "agent-infrastructure", "private-source"],
     repos: [],
-    token: { symbol: "HEIR", ca: null, status: "unknown", sourceUrl: null },
+    token: {
+      symbol: "HEIR",
+      ca: "0x01e75e59eabf83c85360351a100d22e025a75bc2",
+      status: "trading",
+      sourceUrl: "https://heir.es/",
+      caIdentity: "verified_market_identity",
+    },
     buildVisibility: "closed_private",
     researchPriority: "medium",
-    researchQuestion: "Can HEIR publish attributable public source or a verified CA while proving shipping continues?",
-    whatWouldChangeThesis: "Official CA from project-controlled source and/or a public core repository.",
+    researchQuestion: "Can HEIR publish attributable public source while proving shipping continues?",
+    whatWouldChangeThesis: "Public core repository and/or CA republished from project-controlled API docs.",
     adoptionConfidence: 1,
     activityOrigin: "unknown",
     writeup: `HEIR stood out because current shipping could be verified even though current public source code could not.
@@ -630,8 +663,8 @@ Package releases and current product updates prove shipping, but they do not giv
 
 The npm metadata historically referenced a GitHub repository that was private or returned 404.
 
-The exact HEIR contract also should be independently verified from a current project-controlled source before attaching it permanently.`,
-    whatToWatch: bullets(`* official CA verification
+The exact HEIR contract is attached as market-identity verified (listings / heir.es ecosystem), not as a CA published inside public API docs — keep that confidence distinction.`,
+    whatToWatch: bullets(`* stronger official CA publication in docs/API
 * new public repository
 * MCP package releases
 * API releases
@@ -640,12 +673,18 @@ The exact HEIR contract also should be independently verified from a current pro
 * GitHub becoming public
 * expanded developer ecosystem`),
     trackingReason: 'Good testcase for "fresh shipping but private source."',
-    researchContext: "Do not attach a token contract until an official project-controlled source publishes it.",
+    researchContext:
+      "CA 0x01e75e59… on Base is market-identity verified (heir.es / listings). Prefer chainId+CA lookup; do not rely on ticker HEIR alone.",
     evidence: [
       { field: "mcp", value: "@morbidcorp/heir npm", sourceUrl: "https://www.npmjs.com/package/@morbidcorp/heir" },
       { field: "ecosystem", value: "@morbidcorp/ai npm", sourceUrl: "https://www.npmjs.com/package/@morbidcorp/ai" },
       { field: "docs", value: "Official docs", sourceUrl: "https://docs.heir.es/" },
       { field: "website", value: "Official site", sourceUrl: "https://heir.es/" },
+      {
+        field: "token_contract",
+        value: "0x01e75e59eabf83c85360351a100d22e025a75bc2 (verified_market_identity)",
+        sourceUrl: "https://heir.es/",
+      },
     ],
   },
   {
@@ -668,6 +707,7 @@ The exact HEIR contract also should be independently verified from a current pro
       ca: "0xe5dd257bab19cb8cb6b3628c09b62465ef4b2b07",
       status: "trading",
       sourceUrl: "https://www.apinow.fun/token",
+      caIdentity: "verified",
     },
     buildVisibility: "no_verified_repo",
     researchPriority: "medium",
@@ -708,6 +748,11 @@ Usage metrics need to be separated into USDC-paid calls, APINOW-linked activity,
       { field: "token", value: "Official token page", sourceUrl: "https://www.apinow.fun/token" },
       { field: "roadmap", value: "Official roadmap", sourceUrl: "https://www.apinow.fun/roadmap" },
       { field: "developers", value: "Developer docs", sourceUrl: "https://www.apinow.fun/developers" },
+      {
+        field: "token_contract",
+        value: "0xe5dd257bab19cb8cb6b3628c09b62465ef4b2b07",
+        sourceUrl: "https://www.apinow.fun/token",
+      },
     ],
   },
   {
@@ -729,11 +774,17 @@ Usage metrics need to be separated into USDC-paid calls, APINOW-linked activity,
       { owner: "BuiltByEcho", repo: "agent-brief", role: "sdk" },
       { owner: "BuiltByEcho", repo: ".github", role: "org" },
     ],
-    token: { symbol: "ECHO", ca: null, status: "unknown", sourceUrl: null },
+    token: {
+      symbol: "ECHO",
+      ca: "0xa7f63eb41779925803a3eec30890742571e63ba3",
+      status: "trading",
+      sourceUrl: "https://x.com/BuiltByEcho",
+      caIdentity: "verified",
+    },
     buildVisibility: "open_stale",
     researchPriority: "low",
-    researchQuestion: "Has BuiltByEcho resumed substantive public shipping, and what is the official ECHO CA?",
-    whatWouldChangeThesis: "Fresh substantive commits plus official CA from BuiltByEcho-controlled source.",
+    researchQuestion: "Has BuiltByEcho resumed substantive public shipping?",
+    whatWouldChangeThesis: "Fresh substantive commits tied to BuiltByEcho products using this CA.",
     adoptionConfidence: 1,
     activityOrigin: "unknown",
     writeup: `Echo is less a single-purpose agent and more of a builder ecosystem.
@@ -747,23 +798,28 @@ The project is clearly real and has shipped actual products.`,
 
 When the repository organization was screened, the newest attributable public projects appeared older than the strict July-24 cutoff.
 
-There is also a ticker/identity risk because numerous unrelated crypto projects use ECHO.
+There is also a ticker/identity risk because numerous unrelated crypto projects use ECHO — always key market lookup by chainId + CA, never ticker alone.
 
-The exact Base token contract should therefore only be attached after confirming it from a current BuiltByEcho-controlled source.`,
+Official @BuiltByEcho publishes CA 0xA7F63eB4… on Base; attached as verified project identity.`,
     whatToWatch: bullets(`* new repositories
 * fresh substantive commits
-* official token CA publication
 * x402 usage
 * Vaultline adoption
 * new agent products
 * cross-project integrations`),
     trackingReason: "Good example of a real multi-product builder whose public-code momentum may be cooling.",
-    researchContext: "Do not attach CA until BuiltByEcho-controlled source publishes it. Avoid ECHO ticker collisions.",
+    researchContext:
+      "ECHO ticker collides heavily. Canonical Base CA: 0xa7f63eb41779925803a3eec30890742571e63ba3 (BuiltByEcho).",
     evidence: [
       { field: "github", value: "BuiltByEcho org", sourceUrl: "https://github.com/BuiltByEcho" },
       { field: "vaultline", value: "Vaultline repo", sourceUrl: "https://github.com/BuiltByEcho/vaultline" },
       { field: "agent_brief", value: "agent-brief repo", sourceUrl: "https://github.com/BuiltByEcho/agent-brief" },
       { field: "website", value: "Official site", sourceUrl: "https://builtbyecho.xyz/" },
+      {
+        field: "token_contract",
+        value: "0xa7f63eb41779925803a3eec30890742571e63ba3",
+        sourceUrl: "https://x.com/BuiltByEcho",
+      },
     ],
   },
   {
@@ -785,6 +841,7 @@ The exact Base token contract should therefore only be attached after confirming
       ca: "0x587cd533f418825521f3a1daa7ccd1e7339a1b07",
       status: "trading",
       sourceUrl: "https://github.com/ethereumdegen/stark-bot",
+      caIdentity: "verified",
     },
     buildVisibility: "open_stale",
     researchPriority: "low",
@@ -820,6 +877,11 @@ STARKBOT is a perfect example of: "excellent codebase, weak current builder sign
     evidence: [
       { field: "github", value: "ethereumdegen/stark-bot", sourceUrl: "https://github.com/ethereumdegen/stark-bot" },
       { field: "website", value: "Official site", sourceUrl: "https://starkbot.ai/" },
+      {
+        field: "token_contract",
+        value: "0x587cd533f418825521f3a1daa7ccd1e7339a1b07",
+        sourceUrl: "https://github.com/ethereumdegen/stark-bot",
+      },
     ],
   },
   {
@@ -840,11 +902,17 @@ STARKBOT is a perfect example of: "excellent codebase, weak current builder sign
       { owner: "otonix-ai", repo: "otonix", role: "core" },
       { owner: "otonix-ai", repo: "agent", role: "historical" },
     ],
-    token: { symbol: "OTX", ca: null, status: "unknown", sourceUrl: null },
+    token: {
+      symbol: "OTX",
+      ca: "0xf7e2a6226ffe0693dd85406ac3a8917cbea5dc40",
+      status: "low_liquidity",
+      sourceUrl: "https://otonix.tech/",
+      caIdentity: "verified_market_identity",
+    },
     buildVisibility: "open_stale",
     researchPriority: "low",
     researchQuestion: "Is Otonix a dormant snapshot or an active private rebuild?",
-    whatWouldChangeThesis: "Fresh commits plus official OTX CA from Otonix-controlled source.",
+    whatWouldChangeThesis: "Fresh commits confirming this OTX CA from Otonix-controlled source.",
     adoptionConfidence: 0,
     activityOrigin: "unknown",
     writeup: `Otonix has one of the more unusual autonomous-agent infrastructure concepts.
@@ -860,21 +928,26 @@ The principal public repo contains meaningful code but only a very small number 
 
 That raises the possibility that the repository is more of a public code snapshot than evidence of ongoing open development.
 
-The exact current OTX contract should also be verified again from an official Otonix-controlled source before attaching it permanently.`,
+The exact current OTX contract is attached as market-identity verified — OTX ticker collides; always use chainId + CA 0xf7e2a622…`,
     whatToWatch: bullets(`* fresh commits
 * product availability
 * active VPS provisioning
 * x402 settlements
-* official OTX CA
 * package releases
 * domain transactions
 * new infrastructure integrations`),
     trackingReason: "Interesting architecture, but currently a dormant/revival candidate.",
-    researchContext: "Do not attach OTX CA until official source publishes it.",
+    researchContext:
+      "OTX is a common ticker. Canonical Base CA: 0xf7e2a6226ffe0693dd85406ac3a8917cbea5dc40 (verified_market_identity).",
     evidence: [
       { field: "github", value: "otonix-ai/otonix", sourceUrl: "https://github.com/otonix-ai/otonix" },
       { field: "historical", value: "otonix-ai/agent", sourceUrl: "https://github.com/otonix-ai/agent" },
       { field: "website", value: "Official site", sourceUrl: "https://otonix.tech/" },
+      {
+        field: "token_contract",
+        value: "0xf7e2a6226ffe0693dd85406ac3a8917cbea5dc40 (verified_market_identity)",
+        sourceUrl: "https://otonix.tech/",
+      },
     ],
   },
   {
@@ -890,11 +963,17 @@ The exact current OTX contract should also be verified again from an official Ot
     identity: 8,
     tagSlugs: ["ai-agent", "polymarket", "trading", "telegram", "backend", "payments", "base", "dormant"],
     repos: [],
-    token: { symbol: "ZER0", ca: null, status: "unknown", sourceUrl: null },
+    token: {
+      symbol: "ZER0",
+      ca: "0x34e8bf29896722f01894c53c288e74a59c284ba3",
+      status: "low_liquidity",
+      sourceUrl: "https://basescan.org/token/0x34e8bf29896722f01894c53c288e74a59c284ba3",
+      caIdentity: "verified_market_identity",
+    },
     buildVisibility: "open_stale",
     researchPriority: "low",
     researchQuestion: "Any revival of public ZER0 repositories or product uptime?",
-    whatWouldChangeThesis: "Repo revival with substantive commits and verified CA.",
+    whatWouldChangeThesis: "Repo revival with substantive commits confirming this Base CA.",
     adoptionConfidence: 0,
     activityOrigin: "unknown",
     writeup: `ZER0 was a good example of a token that initially looked much more interesting after inspecting its actual code.
@@ -908,7 +987,7 @@ The builder's public ZER0 repositories were last updated around May 2026, far ou
 
 The project therefore fails the main thesis: we are specifically looking for builders who are shipping now.
 
-The exact token CA should also be re-established through the identity pipeline before import if it cannot be independently resolved.`,
+The exact token CA is attached as market-identity verified for the Base “Fully Autonomous Polymarket Agent” ZER0 — do not confuse with unrelated Solana ZER0 assets.`,
     whatToWatch: bullets(`* repo revival
 * new releases
 * product uptime
@@ -918,8 +997,14 @@ The exact token CA should also be re-established through the identity pipeline b
 * new public code`),
     trackingReason: "Useful dormant microcap benchmark with historically real application code.",
     researchContext:
-      "Repo was referenced as zer0-analysis in research notes — attach exact owner/repo only when verified. CA left empty until official source.",
-    evidence: [],
+      "Base CA 0x34e8bf29896722f01894c53c288e74a59c284ba3 (verified_market_identity). Never match by ticker alone — Solana ZER0 collisions exist.",
+    evidence: [
+      {
+        field: "token_contract",
+        value: "0x34e8bf29896722f01894c53c288e74a59c284ba3 (verified_market_identity · Base Polymarket agent)",
+        sourceUrl: "https://basescan.org/token/0x34e8bf29896722f01894c53c288e74a59c284ba3",
+      },
+    ],
   },
   {
     slug: "thesis",
@@ -941,6 +1026,7 @@ The exact token CA should also be re-established through the identity pipeline b
       ca: "0x36e807119529e44d6f36ad5ce24aeb87a4529ba3",
       status: "low_liquidity",
       sourceUrl: "https://thesisonbase.com/docs.html",
+      caIdentity: "verified",
     },
     buildVisibility: "open_stale",
     researchPriority: "low",
@@ -981,6 +1067,11 @@ THESIS is therefore a classic CODE × CAP false positive if recency is ignored.`
       { field: "github", value: "thesisAI1/thesis", sourceUrl: "https://github.com/thesisAI1/thesis" },
       { field: "website", value: "Official site", sourceUrl: "https://thesisonbase.com/" },
       { field: "docs", value: "Official docs", sourceUrl: "https://thesisonbase.com/docs.html" },
+      {
+        field: "token_contract",
+        value: "0x36e807119529e44d6f36ad5ce24aeb87a4529ba3",
+        sourceUrl: "https://thesisonbase.com/docs.html",
+      },
     ],
   },
   {
@@ -995,7 +1086,13 @@ THESIS is therefore a classic CODE × CAP false positive if recency is ignored.`
     identity: 8,
     tagSlugs: ["ai", "data", "x402", "base", "private-source", "watch"],
     repos: [],
-    token: { symbol: "ARBUS", ca: null, status: "unknown", sourceUrl: null },
+    token: {
+      symbol: "ARBUS",
+      ca: "0xbdc27118ca76b375c6887b0ff068afb03dfc21a0",
+      status: "low_liquidity",
+      sourceUrl: "https://basescan.org/token/0xbdc27118ca76b375c6887b0ff068afb03dfc21a0",
+      caIdentity: "verified_market_identity",
+    },
     buildVisibility: "closed_private",
     researchPriority: "low",
     researchQuestion: "Will Arbus publish attributable public code or developer surfaces?",
@@ -1020,8 +1117,15 @@ Market activity was also extremely thin during the original screen.`,
 * liquidity
 * trading activity`),
     trackingReason: "Legitimate product candidate but weak public-development visibility.",
-    researchContext: "CA left empty until official attributable source. Code not publicly verifiable group.",
-    evidence: [],
+    researchContext:
+      "Base CA 0xbdc27118ca76b375c6887b0ff068afb03dfc21a0 (verified_market_identity via Coinbase/project-linked listing). Lookup by chainId+CA only.",
+    evidence: [
+      {
+        field: "token_contract",
+        value: "0xbdc27118ca76b375c6887b0ff068afb03dfc21a0 (verified_market_identity)",
+        sourceUrl: "https://basescan.org/token/0xbdc27118ca76b375c6887b0ff068afb03dfc21a0",
+      },
+    ],
   },
   {
     slug: "sniper-search",
@@ -1035,7 +1139,13 @@ Market activity was also extremely thin during the original screen.`,
     identity: 8,
     tagSlugs: ["search", "research", "intelligence", "base", "low-liquidity", "private-source"],
     repos: [],
-    token: { symbol: "SS", ca: null, status: "unknown", sourceUrl: null },
+    token: {
+      symbol: "SS",
+      ca: "0xa2d4aec94ba0896d95ccc5451c9525b9ec0314de",
+      status: "low_liquidity",
+      sourceUrl: "https://basescan.org/token/0xa2d4aec94ba0896d95ccc5451c9525b9ec0314de",
+      caIdentity: "verified_market_identity",
+    },
     buildVisibility: "closed_private",
     researchPriority: "low",
     researchQuestion: "Any attributable public code or sustained liquidity for Sniper Search?",
@@ -1043,6 +1153,8 @@ Market activity was also extremely thin during the original screen.`,
     adoptionConfidence: 0,
     activityOrigin: "unknown",
     writeup: `Sniper Search was confirmed as a real Base token/product rather than a ticker collision.
+
+This is Sniper Search by Virtuals / SS (CA 0xa2d4Aec9…). Do NOT confuse it with the unrelated Base SNPX token also named Sniper Search.
 
 The project fits the broader agent/search intelligence thesis and historically traded at a very small valuation.`,
     whatsHoldingBack: `Two major weaknesses:
@@ -1058,8 +1170,15 @@ Therefore the low market cap does not currently provide a convincing "code versu
 * sustained volume
 * external integrations`),
     trackingReason: "Low-priority watch candidate.",
-    researchContext: "CA left empty until official source. Code not publicly verifiable group.",
-    evidence: [],
+    researchContext:
+      "Canonical Base CA 0xa2d4aec94ba0896d95ccc5451c9525b9ec0314de (Virtuals SS). Never match SNPX or ticker-only “Sniper Search”.",
+    evidence: [
+      {
+        field: "token_contract",
+        value: "0xa2d4aec94ba0896d95ccc5451c9525b9ec0314de (verified_market_identity · Virtuals SS)",
+        sourceUrl: "https://basescan.org/token/0xa2d4aec94ba0896d95ccc5451c9525b9ec0314de",
+      },
+    ],
   },
   {
     slug: "mio",
@@ -1073,7 +1192,13 @@ Therefore the low market cap does not currently provide a convincing "code versu
     identity: 7,
     tagSlugs: ["x402", "base", "rejected", "low-liquidity", "contract-risk"],
     repos: [],
-    token: { symbol: "MIO", ca: null, status: "abandoned", sourceUrl: null },
+    token: {
+      symbol: "MIO",
+      ca: "0xe19e7429ab6c1f9dd391faa88fbb940c7d22f18f",
+      status: "abandoned",
+      sourceUrl: "https://www.coingecko.com/en/coins/mio",
+      caIdentity: "verified_market_identity",
+    },
     buildVisibility: "unknown",
     researchPriority: "low",
     researchQuestion: "None unless meaningful liquidity and public development appear.",
@@ -1095,8 +1220,15 @@ This is exactly the kind of token CODE × CAP should automatically deprioritize 
 * contract-control concerns change
 * legitimate product usage emerges`),
     trackingReason: 'Negative benchmark for "tiny does not equal asymmetric."',
-    researchContext: "Negative benchmark group. Do not treat tiny mcap as opportunity.",
-    evidence: [],
+    researchContext:
+      "Negative benchmark. CoinGecko Base CA 0xe19e7429ab6c1f9dd391faa88fbb940c7d22f18f (verified_market_identity). Trading stopped; proxy/admin-control warnings — keep rejected.",
+    evidence: [
+      {
+        field: "token_contract",
+        value: "0xe19e7429ab6c1f9dd391faa88fbb940c7d22f18f (verified_market_identity · abandoned)",
+        sourceUrl: "https://www.coingecko.com/en/coins/mio",
+      },
+    ],
   },
 ];
 
@@ -1205,45 +1337,119 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
     }
   }
 
-  // Token — only if CA or symbol; never invent CA
+  // Token — upsert by chainId+CA; never invent CA; never overwrite a different CA (migration-safe)
   if (p.token) {
-    const ca = p.token.ca?.trim().toLowerCase() || null;
+    const ca = normalizeCa(p.token.ca);
+    const caIdentity = p.token.caIdentity ?? (ca && p.token.sourceUrl ? "verified" : undefined);
+    const contractVerified = caIdentity === "verified";
     const existingTokens = await db.select().from(tokens).where(eq(tokens.projectId, projectId));
-    const byCa = ca ? existingTokens.find((t) => t.contractAddress === ca) : null;
-    const bySymbol = existingTokens.find(
-      (t) => (t.symbol ?? "").toLowerCase() === p.token!.symbol.toLowerCase() && t.isCurrent,
+    const byCa = ca
+      ? existingTokens.find((t) => normalizeCa(t.contractAddress) === ca)
+      : undefined;
+    const currentBySymbol = existingTokens.find(
+      (t) =>
+        t.isCurrent && (t.symbol ?? "").toLowerCase() === p.token!.symbol.toLowerCase(),
     );
 
     if (byCa) {
+      // Same chainId+CA already on project — update metadata only
       await db
         .update(tokens)
         .set({
           symbol: p.token.symbol,
+          name: p.name,
+          chain: p.chain,
+          chainId: p.chainId,
           tokenStatus: p.token.status,
-          sourceUrl: p.token.sourceUrl ?? null,
+          sourceUrl: p.token.sourceUrl ?? byCa.sourceUrl ?? null,
+          contractVerified,
           isCurrent: true,
+          tokenRole: byCa.tokenRole === "legacy" ? "primary" : byCa.tokenRole,
           updatedAt: now,
         })
         .where(eq(tokens.id, byCa.id));
-    } else if (bySymbol && !ca) {
-      await db
-        .update(tokens)
-        .set({
-          tokenStatus: p.token.status,
-          sourceUrl: p.token.sourceUrl ?? null,
-          updatedAt: now,
-        })
-        .where(eq(tokens.id, bySymbol.id));
-    } else if (ca || p.token.symbol) {
-      // If attaching CA, require sourceUrl
-      if (ca && !p.token.sourceUrl) {
-        console.warn(`${p.slug}: CA without SOURCE_URL — inserting as unverified/unknown without overwriting`);
+
+      // Ensure only this token is current for the project
+      for (const t of existingTokens) {
+        if (t.id !== byCa.id && t.isCurrent) {
+          await db
+            .update(tokens)
+            .set({ isCurrent: false, updatedAt: now })
+            .where(eq(tokens.id, t.id));
+        }
       }
-      if (ca) {
+    } else if (currentBySymbol) {
+      const existingCa = normalizeCa(currentBySymbol.contractAddress);
+
+      if (!existingCa && ca) {
+        // Fill CA onto existing row — do not create a duplicate project/token
         await db
           .update(tokens)
-          .set({ isCurrent: false, updatedAt: now })
-          .where(eq(tokens.projectId, projectId));
+          .set({
+            contractAddress: ca,
+            chain: p.chain,
+            chainId: p.chainId,
+            tokenStatus: p.token.status,
+            sourceUrl: p.token.sourceUrl ?? null,
+            contractVerified,
+            symbol: p.token.symbol,
+            name: p.name,
+            updatedAt: now,
+          })
+          .where(eq(tokens.id, currentBySymbol.id));
+      } else if (existingCa && ca && existingCa !== ca) {
+        // Migration: preserve old CA as legacy, insert new current token
+        try {
+          const [inserted] = await db
+            .insert(tokens)
+            .values({
+              projectId,
+              symbol: p.token.symbol,
+              name: p.name,
+              chain: p.chain,
+              chainId: p.chainId,
+              contractAddress: ca,
+              tokenStatus: p.token.status,
+              tokenRole: "primary",
+              isCurrent: true,
+              sourceUrl: p.token.sourceUrl ?? null,
+              contractVerified,
+            })
+            .returning({ id: tokens.id });
+
+          await db
+            .update(tokens)
+            .set({
+              isCurrent: false,
+              tokenRole: "legacy",
+              tokenStatus:
+                currentBySymbol.tokenStatus === "migration_pending"
+                  ? "deprecated"
+                  : currentBySymbol.tokenStatus,
+              migrationTargetTokenId: inserted?.id ?? null,
+              updatedAt: now,
+            })
+            .where(eq(tokens.id, currentBySymbol.id));
+        } catch (e) {
+          console.warn(`${p.slug} token migration insert:`, e instanceof Error ? e.message : e);
+        }
+      } else {
+        // Same CA (already handled) or no CA in seed — refresh status/source only
+        await db
+          .update(tokens)
+          .set({
+            tokenStatus: p.token.status,
+            sourceUrl: p.token.sourceUrl ?? currentBySymbol.sourceUrl ?? null,
+            contractVerified: ca ? contractVerified : currentBySymbol.contractVerified,
+            chainId: p.chainId,
+            chain: p.chain,
+            updatedAt: now,
+          })
+          .where(eq(tokens.id, currentBySymbol.id));
+      }
+    } else if (ca || p.token.symbol) {
+      if (ca && !p.token.sourceUrl) {
+        console.warn(`${p.slug}: CA without SOURCE_URL — attaching with market/unknown confidence`);
       }
       try {
         await db.insert(tokens).values({
@@ -1253,11 +1459,11 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
           chain: p.chain,
           chainId: p.chainId,
           contractAddress: ca,
-          tokenStatus: ca && p.token.sourceUrl ? p.token.status : ca ? "unknown" : p.token.status,
+          tokenStatus: p.token.status,
           tokenRole: "primary",
           isCurrent: true,
           sourceUrl: p.token.sourceUrl ?? null,
-          contractVerified: false,
+          contractVerified,
         });
       } catch (e) {
         console.warn(`${p.slug} token insert:`, e instanceof Error ? e.message : e);
@@ -1288,7 +1494,7 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
       severity: "info",
       autoGenerated: false,
       confirmed: true,
-      dedupeKey: `research-seed-pack-v3-${p.slug}`,
+      dedupeKey: `research-seed-pack-v4-ca-${p.slug}`,
     })
     .onConflictDoNothing();
 
