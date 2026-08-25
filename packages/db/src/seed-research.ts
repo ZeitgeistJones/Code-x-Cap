@@ -1350,6 +1350,11 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
       (t) =>
         t.isCurrent && (t.symbol ?? "").toLowerCase() === p.token!.symbol.toLowerCase(),
     );
+    // Also match any current row missing a CA (symbol drift / empty symbol)
+    const currentMissingCa = existingTokens.find(
+      (t) => t.isCurrent && !normalizeCa(t.contractAddress),
+    );
+    const fillTarget = currentBySymbol ?? currentMissingCa;
 
     if (byCa) {
       // Same chainId+CA already on project — update metadata only
@@ -1378,8 +1383,8 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
             .where(eq(tokens.id, t.id));
         }
       }
-    } else if (currentBySymbol) {
-      const existingCa = normalizeCa(currentBySymbol.contractAddress);
+    } else if (fillTarget) {
+      const existingCa = normalizeCa(fillTarget.contractAddress);
 
       if (!existingCa && ca) {
         // Fill CA onto existing row — do not create a duplicate project/token
@@ -1396,7 +1401,7 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
             name: p.name,
             updatedAt: now,
           })
-          .where(eq(tokens.id, currentBySymbol.id));
+          .where(eq(tokens.id, fillTarget.id));
       } else if (existingCa && ca && existingCa !== ca) {
         // Migration: preserve old CA as legacy, insert new current token
         try {
@@ -1423,13 +1428,13 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
               isCurrent: false,
               tokenRole: "legacy",
               tokenStatus:
-                currentBySymbol.tokenStatus === "migration_pending"
+                fillTarget.tokenStatus === "migration_pending"
                   ? "deprecated"
-                  : currentBySymbol.tokenStatus,
+                  : fillTarget.tokenStatus,
               migrationTargetTokenId: inserted?.id ?? null,
               updatedAt: now,
             })
-            .where(eq(tokens.id, currentBySymbol.id));
+            .where(eq(tokens.id, fillTarget.id));
         } catch (e) {
           console.warn(`${p.slug} token migration insert:`, e instanceof Error ? e.message : e);
         }
@@ -1439,13 +1444,13 @@ async function upsertProject(db: ReturnType<typeof createDb>, p: SeedProject) {
           .update(tokens)
           .set({
             tokenStatus: p.token.status,
-            sourceUrl: p.token.sourceUrl ?? currentBySymbol.sourceUrl ?? null,
-            contractVerified: ca ? contractVerified : currentBySymbol.contractVerified,
+            sourceUrl: p.token.sourceUrl ?? fillTarget.sourceUrl ?? null,
+            contractVerified: ca ? contractVerified : fillTarget.contractVerified,
             chainId: p.chainId,
             chain: p.chain,
             updatedAt: now,
           })
-          .where(eq(tokens.id, currentBySymbol.id));
+          .where(eq(tokens.id, fillTarget.id));
       }
     } else if (ca || p.token.symbol) {
       if (ca && !p.token.sourceUrl) {
@@ -1549,6 +1554,21 @@ export async function seedResearchProjects(connectionString?: string) {
     }
   }
 
+  // Report current token CAs after seed so the UI can confirm attach worked
+  const caRows = await db
+    .select({
+      slug: projects.slug,
+      symbol: tokens.symbol,
+      ca: tokens.contractAddress,
+      status: tokens.tokenStatus,
+    })
+    .from(tokens)
+    .innerJoin(projects, eq(tokens.projectId, projects.id))
+    .where(eq(tokens.isCurrent, true));
+
+  const withCa = caRows.filter((r) => Boolean(r.ca?.trim()));
+  const missingCa = caRows.filter((r) => !r.ca?.trim());
+
   return {
     ok: errors.length === 0,
     count: SEED.length,
@@ -1556,6 +1576,15 @@ export async function seedResearchProjects(connectionString?: string) {
     updated,
     errors,
     slugs: SEED.map((p) => p.slug),
+    tokensWithCa: withCa.length,
+    tokensMissingCa: missingCa.length,
+    tokenCas: withCa.map((r) => ({
+      slug: r.slug,
+      symbol: r.symbol,
+      ca: r.ca,
+      status: r.status,
+    })),
+    missingCaSlugs: missingCa.map((r) => r.slug),
   };
 }
 

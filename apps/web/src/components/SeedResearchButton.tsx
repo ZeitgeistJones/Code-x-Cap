@@ -27,6 +27,9 @@ export function SeedResearchButton({
         updated?: string[];
         errors?: Array<{ slug: string; error: string }>;
         count?: number;
+        tokensWithCa?: number;
+        tokensMissingCa?: number;
+        missingCaSlugs?: string[];
       };
 
       if (!res.ok) {
@@ -38,10 +41,55 @@ export function SeedResearchButton({
       const updated = data.updated?.length ?? 0;
       const failed = data.errors?.length ?? 0;
       const missing = data.errors?.map((e) => e.slug).join(", ");
+
+      // CAs alone don't fill the table — pull markets next
+      let marketLine = "\n\nMarkets: skipped (seed error)";
+      if (failed === 0 || (data.tokensWithCa ?? 0) > 0) {
+        try {
+          const mRes = await fetch("/api/admin/refresh-markets", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const mData = (await mRes.json()) as {
+            error?: string;
+            refreshed?: number;
+            succeeded?: number;
+            withMcap?: number;
+            failed?: number;
+            failures?: Array<{ symbol: string | null; error: string }>;
+          };
+          if (!mRes.ok) {
+            marketLine = `\n\nMarkets refresh failed: ${mData.error ?? mRes.status}`;
+          } else {
+            const fails =
+              mData.failures && mData.failures.length > 0
+                ? `\nFailed: ${mData.failures.map((f) => f.symbol ?? "?").join(", ")}`
+                : "";
+            marketLine =
+              `\n\nMarkets refreshed.\n` +
+              `Tried: ${mData.refreshed ?? 0}\n` +
+              `OK: ${mData.succeeded ?? 0}\n` +
+              `With mcap/FDV: ${mData.withMcap ?? 0}\n` +
+              `Failed: ${mData.failed ?? 0}` +
+              fails;
+          }
+        } catch (e) {
+          marketLine = `\n\nMarkets refresh error: ${e instanceof Error ? e.message : "failed"}`;
+        }
+      }
+
       window.alert(
         `Research seed done.\nCreated: ${created}\nUpdated: ${updated}\nFailed: ${failed}` +
           (missing ? `\nFailed slugs: ${missing}` : "") +
-          `\nExpected total: ${data.count ?? 17}`,
+          `\nTokens with CA now: ${data.tokensWithCa ?? "?"}` +
+          `\nTokens still missing CA: ${data.tokensMissingCa ?? "?"}` +
+          (data.missingCaSlugs?.length
+            ? `\nMissing: ${data.missingCaSlugs.join(", ")}`
+            : "") +
+          `\nExpected projects: ${data.count ?? 17}` +
+          marketLine,
       );
       router.refresh();
     } catch (e) {
@@ -53,7 +101,7 @@ export function SeedResearchButton({
 
   return (
     <button type="button" className={className} onClick={onClick} disabled={busy}>
-      {busy ? "Seeding…" : label}
+      {busy ? "Seeding + markets…" : label}
     </button>
   );
 }

@@ -1,6 +1,9 @@
 /**
  * DexScreener public API — no key. Used as market fallback when GeckoTerminal is thin.
  * Docs: https://docs.dexscreener.com/api/reference
+ *
+ * Prefer /token-pairs/v1/{chain}/{token}; if empty, fall back to /latest/dex/tokens/{token}
+ * and keep only pairs on the requested chain (never switch to a same-ticker other token).
  */
 
 import type { MarketDataProvider, MarketSnapshotData, Provenance } from "./types";
@@ -34,15 +37,31 @@ function num(v: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function pickBestPair(pairs: DsPair[], tokenAddress: string): DsPair | null {
+function pickBestPair(pairs: DsPair[], tokenAddress: string, network: string): DsPair | null {
   const addr = tokenAddress.toLowerCase();
-  const relevant = pairs.filter(
-    (p) => (p.baseToken?.address ?? "").toLowerCase() === addr || !p.baseToken?.address,
+  const onChain = pairs.filter((p) => (p.chainId ?? "").toLowerCase() === network);
+  const pool = (onChain.length ? onChain : pairs).filter(
+    (p) => (p.baseToken?.address ?? "").toLowerCase() === addr,
   );
-  const pool = (relevant.length ? relevant : pairs)
+  const ranked = (pool.length ? pool : onChain.length ? onChain : pairs)
     .map((p) => ({ p, liq: num(p.liquidity?.usd) ?? 0 }))
     .sort((a, b) => b.liq - a.liq);
-  return pool[0]?.p ?? null;
+  return ranked[0]?.p ?? null;
+}
+
+function emptyResult(provider: string, sourceUrl: string): MarketSnapshotData & { provenance: Provenance } {
+  return {
+    priceUsd: null,
+    marketCap: null,
+    fdv: null,
+    liquidityUsd: null,
+    volume24h: null,
+    provenance: {
+      provider,
+      sourceUrl,
+      fetchedAt: new Date(),
+    },
+  };
 }
 
 export class DexScreenerProvider implements MarketDataProvider {
@@ -62,50 +81,45 @@ export class DexScreenerProvider implements MarketDataProvider {
     const address = contractAddress.trim().toLowerCase();
     if (!address) return null;
 
-    const sourceUrl = `${DS_BASE}/token-pairs/v1/${network}/${address}`;
-    const res = await fetch(sourceUrl, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
+    const pairsUrl = `${DS_BASE}/token-pairs/v1/${network}/${address}`;
+    let pairs: DsPair[] = [];
+    let sourceUrl = pairsUrl;
 
-    if (res.status === 404) {
-      return {
-        priceUsd: null,
-        marketCap: null,
-        fdv: null,
-        liquidityUsd: null,
-        volume24h: null,
-        provenance: {
-          provider: this.name,
-          sourceUrl,
-          fetchedAt: new Date(),
-        },
-      };
+    try {
+      const res = await fetch(pairsUrl, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const json = (await res.json()) as DsPair[] | { pairs?: DsPair[] };
+        pairs = Array.isArray(json) ? json : (json.pairs ?? []);
+      }
+    } catch {
+      // try fallback below
     }
 
-    if (!res.ok) {
-      throw new Error(`DexScreener ${res.status}: ${await res.text().catch(() => "")}`);
-    }
-
-    const json = (await res.json()) as DsPair[] | { pairs?: DsPair[] };
-    const pairs = Array.isArray(json) ? json : (json.pairs ?? []);
+    // token-pairs is often empty for thin Base microcaps — latest/dex/tokens still has pairs
     if (!pairs.length) {
-      return {
-        priceUsd: null,
-        marketCap: null,
-        fdv: null,
-        liquidityUsd: null,
-        volume24h: null,
-        provenance: {
-          provider: this.name,
-          sourceUrl,
-          fetchedAt: new Date(),
-        },
-      };
+      const latestUrl = `${DS_BASE}/latest/dex/tokens/${address}`;
+      sourceUrl = latestUrl;
+      try {
+        const res = await fetch(latestUrl, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const json = (await res.json()) as { pairs?: DsPair[] };
+          pairs = json.pairs ?? [];
+        }
+      } catch {
+        return emptyResult(this.name, sourceUrl);
+      }
     }
 
-    const best = pickBestPair(pairs, address);
-    if (!best) return null;
+    if (!pairs.length) return emptyResult(this.name, sourceUrl);
+
+    const best = pickBestPair(pairs, address, network);
+    if (!best) return emptyResult(this.name, sourceUrl);
 
     const buys = best.txns?.h24?.buys ?? null;
     const sells = best.txns?.h24?.sells ?? null;

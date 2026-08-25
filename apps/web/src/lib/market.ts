@@ -108,9 +108,13 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
       console.warn("geckoterminal failed", token.symbol, e instanceof Error ? e.message : e);
     }
 
-    // Always try DexScreener when GT is missing or thin on mcap/fdv/liquidity
+    // Always try DexScreener when GT is missing or thin — DS often survives GT 429s
     const needsFallback =
-      !hasUsefulMarket(gt) || gt?.marketCap == null || gt?.liquidityUsd == null || gt?.fdv == null;
+      !hasUsefulMarket(gt) ||
+      gt?.marketCap == null ||
+      gt?.liquidityUsd == null ||
+      gt?.fdv == null ||
+      gt == null;
 
     if (needsFallback) {
       try {
@@ -224,8 +228,8 @@ export async function refreshAllCurrentTokenMarkets(): Promise<RefreshAllSummary
   const results: RefreshResult[] = [];
   for (const t of withCa) {
     results.push(await refreshTokenMarket(t.id));
-    // polite pacing for public APIs
-    await new Promise((r) => setTimeout(r, 350));
+    // GeckoTerminal public API rate-limits hard — pace between tokens
+    await new Promise((r) => setTimeout(r, 1100));
   }
   return {
     results,

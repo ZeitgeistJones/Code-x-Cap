@@ -4,6 +4,7 @@
  *
  * Important: token-level market_cap/fdv/price are often null for microcaps.
  * Pool payloads usually still have base_token_price_usd + fdv_usd — use those.
+ * Public API rate-limits aggressively — retry once on 429 before soft-failing.
  */
 
 import type { MarketDataProvider, MarketSnapshotData, Provenance } from "./types";
@@ -42,6 +43,25 @@ function num(v: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+async function gtFetch(url: string): Promise<Response | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (res.status === 429 || res.status >= 500) {
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+        continue;
+      }
+      return res;
+    } catch {
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
 export class GeckoTerminalProvider implements MarketDataProvider {
   readonly name = "geckoterminal";
 
@@ -60,10 +80,8 @@ export class GeckoTerminalProvider implements MarketDataProvider {
     if (!address) return null;
 
     const sourceUrl = `${GT_BASE}/networks/${network}/tokens/${address}`;
-    const res = await fetch(sourceUrl, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
+    const res = await gtFetch(sourceUrl);
+    if (!res) return null;
 
     if (res.status === 404) {
       return {
@@ -80,13 +98,7 @@ export class GeckoTerminalProvider implements MarketDataProvider {
       };
     }
 
-    if (!res.ok) {
-      // Soft-fail rate limits / 5xx so DexScreener can still fill
-      if (res.status === 429 || res.status >= 500) {
-        return null;
-      }
-      throw new Error(`GeckoTerminal ${res.status}: ${await res.text().catch(() => "")}`);
-    }
+    if (!res.ok) return null;
 
     const json = (await res.json()) as { data?: { attributes?: GtTokenAttributes } };
     const a = json.data?.attributes;
@@ -99,20 +111,15 @@ export class GeckoTerminalProvider implements MarketDataProvider {
     let volume24h = num(a.volume_usd?.h24);
 
     // Pool fallback — only when valuation/price/liq are actually missing.
-    // Do NOT fetch pools solely because market_cap_usd is null when fdv_usd exists
-    // (that doubles GT calls and burns rate limit mid-batch).
     const hasValuation = marketCap != null || fdv != null;
     const needsPool =
       !hasValuation || priceUsd == null || liquidityUsd == null || liquidityUsd < 500;
 
     if (needsPool) {
-      try {
-        const poolsUrl = `${GT_BASE}/networks/${network}/tokens/${address}/pools?page=1`;
-        const poolsRes = await fetch(poolsUrl, {
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-        });
-        if (poolsRes.ok) {
+      const poolsUrl = `${GT_BASE}/networks/${network}/tokens/${address}/pools?page=1`;
+      const poolsRes = await gtFetch(poolsUrl);
+      if (poolsRes?.ok) {
+        try {
           const poolsJson = (await poolsRes.json()) as {
             data?: Array<{ attributes?: GtPoolAttributes }>;
           };
@@ -139,13 +146,12 @@ export class GeckoTerminalProvider implements MarketDataProvider {
             }
             if (volume24h == null && poolVol != null) volume24h = poolVol;
           }
+        } catch {
+          // keep token-level
         }
-      } catch {
-        // keep token-level values
       }
     }
 
-    // For most microcaps circulating ≈ total; FDV is the usable valuation when mcap is absent
     if (marketCap == null && fdv != null) marketCap = fdv;
 
     return {
