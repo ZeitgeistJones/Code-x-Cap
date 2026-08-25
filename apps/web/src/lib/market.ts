@@ -5,8 +5,8 @@
 
 import { dexScreener, geckoTerminal } from "@codexcap/connectors";
 import type { MarketSnapshotData, Provenance } from "@codexcap/connectors";
-import { activitySignals, marketSnapshots, tokens } from "@codexcap/db/schema";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { activitySignals, marketSnapshots, projects, tokens } from "@codexcap/db/schema";
+import { and, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 
 function toNumericString(n: number | null | undefined): string | null {
@@ -65,6 +65,11 @@ export type RefreshResult = {
   volume24h: number | null;
   source?: string;
   error?: string;
+};
+
+export type RefreshAllSummary = {
+  results: RefreshResult[];
+  skippedNoCa: Array<{ symbol: string | null; projectName: string | null }>;
 };
 
 export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult> {
@@ -195,20 +200,40 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
   }
 }
 
-export async function refreshAllCurrentTokenMarkets(): Promise<RefreshResult[]> {
+export async function refreshAllCurrentTokenMarkets(): Promise<RefreshAllSummary> {
   const database = db();
-  const rows = await database
+  const withCa = await database
     .select()
     .from(tokens)
     .where(and(eq(tokens.isCurrent, true), isNotNull(tokens.contractAddress)));
 
+  const withoutCa = await database
+    .select({
+      symbol: tokens.symbol,
+      projectName: projects.name,
+    })
+    .from(tokens)
+    .innerJoin(projects, eq(tokens.projectId, projects.id))
+    .where(
+      and(
+        eq(tokens.isCurrent, true),
+        or(isNull(tokens.contractAddress), eq(tokens.contractAddress, "")),
+      ),
+    );
+
   const results: RefreshResult[] = [];
-  for (const t of rows) {
+  for (const t of withCa) {
     results.push(await refreshTokenMarket(t.id));
     // polite pacing for public APIs
     await new Promise((r) => setTimeout(r, 350));
   }
-  return results;
+  return {
+    results,
+    skippedNoCa: withoutCa.map((r) => ({
+      symbol: r.symbol,
+      projectName: r.projectName,
+    })),
+  };
 }
 
 export async function latestSnapshotsByTokenIds(tokenIds: string[]) {

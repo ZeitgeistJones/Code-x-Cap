@@ -81,6 +81,10 @@ export class GeckoTerminalProvider implements MarketDataProvider {
     }
 
     if (!res.ok) {
+      // Soft-fail rate limits / 5xx so DexScreener can still fill
+      if (res.status === 429 || res.status >= 500) {
+        return null;
+      }
       throw new Error(`GeckoTerminal ${res.status}: ${await res.text().catch(() => "")}`);
     }
 
@@ -94,9 +98,12 @@ export class GeckoTerminalProvider implements MarketDataProvider {
     let liquidityUsd = num(a.total_reserve_in_usd ?? null);
     let volume24h = num(a.volume_usd?.h24);
 
-    // Pool fallback — microcaps often only expose valuation on the pool object
+    // Pool fallback — only when valuation/price/liq are actually missing.
+    // Do NOT fetch pools solely because market_cap_usd is null when fdv_usd exists
+    // (that doubles GT calls and burns rate limit mid-batch).
+    const hasValuation = marketCap != null || fdv != null;
     const needsPool =
-      priceUsd == null || marketCap == null || fdv == null || liquidityUsd == null || liquidityUsd < 500;
+      !hasValuation || priceUsd == null || liquidityUsd == null || liquidityUsd < 500;
 
     if (needsPool) {
       try {

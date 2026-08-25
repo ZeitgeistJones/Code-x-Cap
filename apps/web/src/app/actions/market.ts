@@ -9,11 +9,11 @@ import { db } from "@/lib/db";
 
 export async function refreshAllMarketsAction() {
   if (!(await isAuthenticated())) throw new Error("Unauthorized");
-  const results = await refreshAllCurrentTokenMarkets();
+  const summary = await refreshAllCurrentTokenMarkets();
   revalidatePath("/");
   revalidatePath("/watchlist");
   // Server Actions used as form actions should return void / redirect
-  void results;
+  void summary;
 }
 
 export async function refreshProjectMarketsAction(formData: FormData) {

@@ -27,26 +27,22 @@ export async function POST(request: Request) {
     }
 
     let results;
+    let skippedNoCa: Array<{ symbol: string | null; projectName: string | null }> = [];
+
     if (projectId) {
       const rows = await db().select().from(tokens).where(eq(tokens.projectId, projectId));
       results = [];
       for (const t of rows) {
         if (!t.contractAddress) {
-          results.push({
-            tokenId: t.id,
-            symbol: t.symbol,
-            ok: false,
-            marketCap: null,
-            liquidityUsd: null,
-            volume24h: null,
-            error: "no contract address",
-          });
+          skippedNoCa.push({ symbol: t.symbol, projectName: null });
           continue;
         }
         results.push(await refreshTokenMarket(t.id));
       }
     } else {
-      results = await refreshAllCurrentTokenMarkets();
+      const summary = await refreshAllCurrentTokenMarkets();
+      results = summary.results;
+      skippedNoCa = summary.skippedNoCa;
     }
 
     const ok = results.filter((r) => r.ok);
@@ -55,10 +51,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      // "Tried" = tokens with a CA we actually fetched
       refreshed: results.length,
       succeeded: ok.length,
       failed: failed.length,
       withMcap: withMcap.length,
+      skippedNoCa: skippedNoCa.length,
+      skipped: skippedNoCa,
       results,
       failures: failed.map((r) => ({
         symbol: r.symbol,
