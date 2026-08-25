@@ -1,6 +1,9 @@
 /**
  * GeckoTerminal public API — no key required for basic token lookups.
  * Docs: https://api.geckoterminal.com/docs/index.html
+ *
+ * Important: token-level market_cap/fdv/price are often null for microcaps.
+ * Pool payloads usually still have base_token_price_usd + fdv_usd — use those.
  */
 
 import type { MarketDataProvider, MarketSnapshotData, Provenance } from "./types";
@@ -21,6 +24,15 @@ interface GtTokenAttributes {
   fdv_usd?: string | null;
   market_cap_usd?: string | null;
   total_reserve_in_usd?: string | null;
+  volume_usd?: { h24?: string | null } | null;
+}
+
+interface GtPoolAttributes {
+  reserve_in_usd?: string | null;
+  base_token_price_usd?: string | null;
+  quote_token_price_usd?: string | null;
+  fdv_usd?: string | null;
+  market_cap_usd?: string | null;
   volume_usd?: { h24?: string | null } | null;
 }
 
@@ -76,34 +88,65 @@ export class GeckoTerminalProvider implements MarketDataProvider {
     const a = json.data?.attributes;
     if (!a) return null;
 
-    // Liquidity: token endpoint exposes total_reserve_in_usd across pools when available
+    let priceUsd = num(a.price_usd);
+    let marketCap = num(a.market_cap_usd);
+    let fdv = num(a.fdv_usd);
     let liquidityUsd = num(a.total_reserve_in_usd ?? null);
+    let volume24h = num(a.volume_usd?.h24);
 
-    // Fallback: top pool reserve
-    if (liquidityUsd == null) {
+    // Pool fallback — microcaps often only expose valuation on the pool object
+    const needsPool =
+      priceUsd == null || marketCap == null || fdv == null || liquidityUsd == null || liquidityUsd < 500;
+
+    if (needsPool) {
       try {
         const poolsUrl = `${GT_BASE}/networks/${network}/tokens/${address}/pools?page=1`;
-        const poolsRes = await fetch(poolsUrl, { headers: { Accept: "application/json" } });
+        const poolsRes = await fetch(poolsUrl, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
         if (poolsRes.ok) {
           const poolsJson = (await poolsRes.json()) as {
-            data?: Array<{ attributes?: { reserve_in_usd?: string } }>;
+            data?: Array<{ attributes?: GtPoolAttributes }>;
           };
-          const reserves = (poolsJson.data ?? [])
-            .map((p) => num(p.attributes?.reserve_in_usd))
-            .filter((n): n is number => n != null);
-          if (reserves.length) liquidityUsd = Math.max(...reserves);
+          const ranked = (poolsJson.data ?? [])
+            .map((p) => ({
+              attrs: p.attributes ?? {},
+              reserve: num(p.attributes?.reserve_in_usd) ?? 0,
+            }))
+            .sort((x, y) => y.reserve - x.reserve);
+
+          const best = ranked[0]?.attrs;
+          if (best) {
+            const poolPrice = num(best.base_token_price_usd);
+            const poolFdv = num(best.fdv_usd);
+            const poolMcap = num(best.market_cap_usd);
+            const poolLiq = num(best.reserve_in_usd);
+            const poolVol = num(best.volume_usd?.h24);
+
+            if (priceUsd == null && poolPrice != null) priceUsd = poolPrice;
+            if (fdv == null && poolFdv != null) fdv = poolFdv;
+            if (marketCap == null && poolMcap != null) marketCap = poolMcap;
+            if (poolLiq != null && (liquidityUsd == null || poolLiq > liquidityUsd)) {
+              liquidityUsd = poolLiq;
+            }
+            if (volume24h == null && poolVol != null) volume24h = poolVol;
+          }
         }
       } catch {
-        // keep null
+        // keep token-level values
       }
     }
 
+    // For most microcaps circulating ≈ total; FDV is the usable valuation when mcap is absent
+    if (marketCap == null && fdv != null) marketCap = fdv;
+
     return {
-      priceUsd: num(a.price_usd),
-      marketCap: num(a.market_cap_usd),
-      fdv: num(a.fdv_usd),
+      priceUsd,
+      marketCap,
+      fdv,
       liquidityUsd,
-      volume24h: num(a.volume_usd?.h24),
+      volume24h,
       provenance: {
         provider: this.name,
         sourceUrl: `https://www.geckoterminal.com/${network}/tokens/${address}`,

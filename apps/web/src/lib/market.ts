@@ -128,11 +128,14 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
       };
     }
 
+    // Prefer explicit mcap; else FDV (common for Base microcaps where circulating mcap is unset)
+    const valuation = data.marketCap ?? data.fdv ?? null;
+
     await database.insert(marketSnapshots).values({
       tokenId: token.id,
       timestamp: data.provenance.fetchedAt,
       priceUsd: toNumericString(data.priceUsd),
-      marketCap: toNumericString(data.marketCap),
+      marketCap: toNumericString(valuation),
       fdv: toNumericString(data.fdv),
       liquidityUsd: toNumericString(data.liquidityUsd),
       volume24h: toNumericString(data.volume24h),
@@ -149,14 +152,14 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
       .limit(1);
 
     const summaryParts = [
-      data.marketCap != null ? `mcap $${Math.round(data.marketCap).toLocaleString()}` : "mcap n/a",
+      valuation != null ? `mcap $${Math.round(valuation).toLocaleString()}` : "mcap n/a",
       data.liquidityUsd != null ? `liq $${Math.round(data.liquidityUsd).toLocaleString()}` : "liq n/a",
       data.provenance.provider,
     ];
     const signalValues = {
       latestAt: data.provenance.fetchedAt,
       source: data.provenance.provider,
-      confidence: data.marketCap != null || data.liquidityUsd != null ? 7 : 3,
+      confidence: valuation != null || data.liquidityUsd != null ? 7 : 3,
       summary: summaryParts.join(" · "),
       updatedAt: new Date(),
     };
@@ -174,7 +177,7 @@ export async function refreshTokenMarket(tokenId: string): Promise<RefreshResult
       tokenId,
       symbol: token.symbol,
       ok: true,
-      marketCap: data.marketCap,
+      marketCap: valuation,
       liquidityUsd: data.liquidityUsd,
       volume24h: data.volume24h,
       source: data.provenance.provider,
