@@ -1,30 +1,46 @@
 import { NextResponse } from "next/server";
-import { getExpectedAdminKey } from "@/lib/auth";
-import { refreshAllGithub } from "@/lib/github";
+import { assertAdminApiAccess } from "@/lib/admin-api-auth";
+import { refreshAllGithub, refreshProjectGithub } from "@/lib/github";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** POST /api/admin/refresh-github  Header: x-admin-key */
+/**
+ * POST /api/admin/refresh-github
+ * Auth: admin cookie OR x-admin-key.
+ * Body optional: { projectId?: string }
+ */
 export async function POST(request: Request) {
-  const expected = getExpectedAdminKey();
-  if (!expected) {
-    return NextResponse.json({ error: "ADMIN_KEY not configured" }, { status: 500 });
-  }
-  const provided =
-    request.headers.get("x-admin-key") ?? new URL(request.url).searchParams.get("key");
-  if (provided !== expected) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = await assertAdminApiAccess(request);
+  if (denied) return denied;
 
   try {
-    const results = await refreshAllGithub();
+    let projectId: string | undefined;
+    try {
+      const body = (await request.json()) as { projectId?: string };
+      projectId = body.projectId?.trim() || undefined;
+    } catch {
+      // empty body = refresh all
+    }
+
+    const results = projectId
+      ? await refreshProjectGithub(projectId)
+      : await refreshAllGithub();
+
+    const succeeded = results.filter((r) => r.ok);
+    const failed = results.filter((r) => !r.ok);
+
     return NextResponse.json({
       ok: true,
       refreshed: results.length,
+      succeeded: succeeded.length,
+      failed: failed.length,
       results,
-    });
-  } catch (e) {
+      failures: failed.map((r) => ({
+        repo: r.fullName,
+        error: r.error ?? "failed",
+      })),
+    });  } catch (e) {
     const message = e instanceof Error ? e.message : "refresh failed";
     console.error("refresh-github failed", e);
     return NextResponse.json({ error: message }, { status: 500 });

@@ -7,12 +7,12 @@ import {
   TOKEN_STATUSES,
   formatUsdCompact,
 } from "@codexcap/core";
-import { refreshAllMarketsAction } from "@/app/actions/market";
-import { refreshAllGithubAction } from "@/app/actions/github";
 import { listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { BuildCodeCell } from "@/components/BuildCodeCell";
 import { FilterBar } from "@/components/FilterBar";
+import { RefreshGithubButton } from "@/components/RefreshGithubButton";
+import { RefreshMarketsButton } from "@/components/RefreshMarketsButton";
 import { SeedResearchButton } from "@/components/SeedResearchButton";
 import { WhyWriteupButton } from "@/components/WhyWriteup";
 
@@ -63,16 +63,8 @@ export default async function HomePage({
         </div>
         <div className="flex flex-wrap gap-2">
           <SeedResearchButton />
-          <form action={refreshAllGithubAction}>
-            <button type="submit" className="btn">
-              Refresh GitHub
-            </button>
-          </form>
-          <form action={refreshAllMarketsAction}>
-            <button type="submit" className="btn">
-              Refresh markets
-            </button>
-          </form>
+          <RefreshGithubButton />
+          <RefreshMarketsButton />
           <Link href="/projects/new" className="btn btn-primary">
             Add project
           </Link>

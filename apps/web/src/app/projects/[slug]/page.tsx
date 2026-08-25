@@ -24,8 +24,8 @@ import {
   upsertScoreAction,
   upsertSignalAction,
 } from "@/app/actions/projects";
-import { refreshProjectMarketsAction } from "@/app/actions/market";
-import { refreshProjectGithubAction } from "@/app/actions/github";
+import { RefreshGithubButton } from "@/components/RefreshGithubButton";
+import { RefreshMarketsButton } from "@/components/RefreshMarketsButton";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { getProjectBySlug } from "@/lib/queries";
 
@@ -89,20 +89,12 @@ export default async function ProjectDetailPage({
               {project.onWatchlist ? "Unwatch" : "Watch"}
             </button>
           </form>
-          <form action={refreshProjectGithubAction}>
-            <input type="hidden" name="projectId" value={project.id} />
-            <input type="hidden" name="slug" value={project.slug} />
-            <button type="submit" className="btn">
-              Refresh GitHub
-            </button>
-          </form>
-          <form action={refreshProjectMarketsAction}>
-            <input type="hidden" name="projectId" value={project.id} />
-            <input type="hidden" name="slug" value={project.slug} />
-            <button type="submit" className="btn">
-              Refresh market
-            </button>
-          </form>
+          <RefreshGithubButton projectId={project.id} label="Refresh GitHub" />
+          <RefreshMarketsButton
+            projectId={project.id}
+            label="Refresh market"
+            busyLabel="Refreshing market…"
+          />
           <form action={deleteProjectAction}>
             <input type="hidden" name="id" value={project.id} />
             <button type="submit" className="btn btn-danger">
