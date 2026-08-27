@@ -91,6 +91,27 @@ export default async function HomePage({
         </div>
       </div>
 
+      <section className="panel border-accent/20 p-4 text-sm leading-relaxed text-ink-300">
+        <h2 className="font-display text-lg text-ink-100">How to read this (no jargon)</h2>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5">
+          <li>
+            <span className="text-ink-100">Build Signals</span> below are short plain-English notes
+            about public GitHub / market evidence. Each one answers: what happened, why it may
+            matter, what we do not know, and what to watch next.
+          </li>
+          <li>
+            In the projects table, use{" "}
+            <span className="text-accent">Plain English →</span> for a readable research note.
+            Numbers (mcap, liquidity, identity score) are context only — not a trade call.
+          </li>
+          <li>
+            Every claim should have a source link, or say{" "}
+            <span className="text-ink-100">unknown / not verified</span>. Quiet GitHub can still mean
+            private work.
+          </li>
+        </ol>
+      </section>
+
       {dbError ? (
         <div className="panel border-danger/40 p-4 text-sm text-danger">
           <p className="font-mono text-xs uppercase tracking-wider">Database</p>
@@ -117,10 +138,11 @@ export default async function HomePage({
 
       <section className="space-y-3">
         <div>
-          <h2 className="section-title">Recent Build Signals</h2>
-          <p className="mt-1 text-xs text-ink-500">
-            Deterministic summaries of sourced public events. No automated claim is treated as
-            proof of adoption.
+          <h2 className="font-display text-xl text-ink-100">Recent Build Signals</h2>
+          <p className="mt-1 max-w-3xl text-sm text-ink-400">
+            Each card names the tracked token, says whether the public code looks token-related or
+            only product-related, and shows exact-contract market context. Same project record does
+            not automatically mean the live token contract changed.
           </p>
         </div>
         {buildSignals.length > 0 ? (
@@ -130,9 +152,13 @@ export default async function HomePage({
             ))}
           </div>
         ) : (
-          <div className="panel p-4 text-sm text-ink-500">
-            No eligible sourced Build Signals in the last 30 days. Run daily upkeep to refresh
-            public evidence.
+          <div className="panel p-4 text-sm leading-relaxed text-ink-400">
+            <p className="text-ink-200">No plain-English Build Signals ready yet for the last 30 days.</p>
+            <p className="mt-2">
+              Click <span className="text-accent">Run daily upkeep</span> to refresh public GitHub and
+              exact-contract market data. When sourced events arrive, they show up here with
+              explanations anyone can read.
+            </p>
           </div>
         )}
       </section>
@@ -163,7 +189,7 @@ export default async function HomePage({
               <th>Identity</th>
               <th>Build</th>
               <th>Product</th>
-              <th>Why</th>
+              <th>Plain English</th>
               <th></th>
             </tr>
           </thead>

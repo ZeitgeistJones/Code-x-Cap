@@ -519,12 +519,23 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
         liquidityUsd: snapshot?.liquidityUsd ? Number(snapshot.liquidityUsd) : null,
       });
 
+      const commitCountRaw = event.metadata?.commitCount;
+      const commitCount =
+        typeof commitCountRaw === "number" && Number.isFinite(commitCountRaw)
+          ? commitCountRaw
+          : null;
+      const marketCap = snapshot?.marketCap != null ? Number(snapshot.marketCap) : null;
+      const liquidityUsd = snapshot?.liquidityUsd != null ? Number(snapshot.liquidityUsd) : null;
+
       return {
         id: event.id,
         project: {
           id: project.id,
           slug: project.slug,
           name: project.name,
+          shortDescription: project.shortDescription,
+          trackingReason: project.trackingReason,
+          identityConfidence: project.identityConfidence,
         },
         event: {
           type: eventType,
@@ -534,6 +545,7 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
           sourceUrl: event.sourceUrl,
           classification,
           meaningfulScore: score,
+          commitCount,
         },
         currentToken,
         marketSnapshot: snapshot,
@@ -541,9 +553,26 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
         copy: buildSignalCopy({
           projectName: project.name,
           eventType,
+          eventTitle: event.title,
+          eventDescription: event.description,
           classification,
           meaningfulScore: score,
+          commitCount,
           happenedAt: event.timestamp,
+          shortDescription: project.shortDescription,
+          trackingReason: project.trackingReason,
+          identityConfidence: project.identityConfidence,
+          identityLabel: identity,
+          tokenSymbol: currentToken?.symbol ?? null,
+          tokenChain: currentToken?.chain ?? null,
+          tokenContract: currentToken?.contractAddress ?? null,
+          tokenSourceUrl: currentToken?.sourceUrl ?? null,
+          contractVerified: currentToken?.contractVerified ?? false,
+          marketLabel: market,
+          marketCap: Number.isFinite(marketCap) ? marketCap : null,
+          liquidityUsd: Number.isFinite(liquidityUsd) ? liquidityUsd : null,
+          marketSource: snapshot?.source ?? null,
+          marketSnapshotAt: snapshot?.timestamp ?? null,
         }),
       };
     })

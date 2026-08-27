@@ -130,14 +130,14 @@ export default async function ProjectDetailPage({
         </div>
       </header>
 
-      {/* Living research write-up */}
+      {/* Living research write-up — plain English first */}
       <section id="why" className="panel scroll-mt-6 border-accent/20 p-5">
-        <h2 className="font-display text-xl text-ink-100">Research write-up</h2>
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-500">
-          Public-evidence research · uncertainty preserved
+        <h2 className="font-display text-xl text-ink-100">Plain-English research note</h2>
+        <p className="mt-1 text-sm text-ink-400">
+          Public evidence only. Uncertainty stays visible. This is research, not a trade call.
         </p>
         <div className="mt-4 space-y-5 text-sm leading-relaxed">
-          <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
+          <div className="flex flex-wrap gap-2 text-[11px]">
             <span className="rounded-sm border border-accent/40 bg-accent-muted px-1.5 py-0.5 text-accent">
               {(project.discoveryTier ?? "under_the_radar").replace(/_/g, " ")}
             </span>
@@ -151,61 +151,50 @@ export default async function ProjectDetailPage({
               {(project.researchPriority ?? "medium").replace(/_/g, " ")}
             </span>
             <span className="rounded-sm border border-ink-700 px-1.5 py-0.5 text-ink-500">
-              adoption {project.adoptionConfidence ?? 0}/10
+              adoption confidence {project.adoptionConfidence ?? 0}/10
             </span>
           </div>
 
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-accent">
-              Why it&apos;s interesting
-            </h3>
+            <h3 className="text-sm font-medium text-accent">Why it&apos;s interesting</h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
               {project.writeup?.trim() ||
                 project.trackingReason?.trim() ||
-                "No write-up recorded yet. Add one when editing."}
+                "No plain-English write-up recorded yet. Add one when editing."}
             </p>
           </div>
 
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-warn">
-              What&apos;s holding it back
-            </h3>
+            <h3 className="text-sm font-medium text-warn">What&apos;s holding it back</h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
               {project.whatsHoldingBack?.trim() || "Not recorded yet."}
             </p>
           </div>
 
           <div className="rounded-sm border border-ink-700 bg-ink-950/40 p-3">
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-100">
-              Biggest unanswered question
-            </h3>
+            <h3 className="text-sm font-medium text-ink-100">Biggest unanswered question</h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-100">
               {project.researchQuestion?.trim() || "Not recorded yet."}
             </p>
           </div>
 
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-              What would change the thesis
-            </h3>
+            <h3 className="text-sm font-medium text-ink-200">What would change our mind</h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
               {project.whatWouldChangeThesis?.trim() || "Not recorded yet."}
             </p>
           </div>
 
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-              What to watch
-            </h3>
+            <h3 className="text-sm font-medium text-ink-200">What to watch next</h3>
             <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
               {project.whatToWatch?.trim() || "Not recorded yet."}
             </p>
           </div>
 
-          <p className="font-mono text-[10px] text-ink-600">
-            Public code recency ≠ project activity. Activity origin:{" "}
-            {(project.activityOrigin ?? "unknown").replace(/_/g, " ")}. Stale open source can still mean
-            private current development — that lowers build visibility, not automatic dormancy.
+          <p className="text-xs leading-relaxed text-ink-500">
+            Quiet public GitHub does not automatically mean the project is dead — current work can be
+            private. Activity origin: {(project.activityOrigin ?? "unknown").replace(/_/g, " ")}.
           </p>
         </div>
       </section>

@@ -23,7 +23,13 @@ export type WhyWriteupData = {
   tokenSymbol?: string | null;
 };
 
-function Badge({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "accent" | "warn" }) {
+function Badge({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "accent" | "warn";
+}) {
   const cls =
     tone === "accent"
       ? "border-accent/40 bg-accent-muted text-accent"
@@ -31,9 +37,30 @@ function Badge({ children, tone = "default" }: { children: React.ReactNode; tone
         ? "border-[color:var(--warn)]/40 text-[color:var(--warn)]"
         : "border-ink-600 text-ink-400";
   return (
-    <span className={`rounded-sm border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${cls}`}>
-      {children}
-    </span>
+    <span className={`rounded-sm border px-1.5 py-0.5 text-[11px] ${cls}`}>{children}</span>
+  );
+}
+
+function Section({
+  title,
+  body,
+  tone = "default",
+}: {
+  title: string;
+  body: string;
+  tone?: "default" | "warn" | "emphasis";
+}) {
+  const titleClass =
+    tone === "warn"
+      ? "text-warn"
+      : tone === "emphasis"
+        ? "text-ink-100"
+        : "text-accent";
+  return (
+    <div>
+      <h3 className={`text-sm font-medium ${titleClass}`}>{title}</h3>
+      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-ink-200">{body}</p>
+    </div>
   );
 }
 
@@ -47,60 +74,41 @@ export function WhyWriteupBody({ data }: { data: WhyWriteupData }) {
 
   return (
     <div className="space-y-4 text-sm leading-relaxed text-ink-300">
+      <p className="text-ink-400">
+        This is a research note in plain English. It is not a buy, sell, or price prediction.
+      </p>
+
       <div className="flex flex-wrap gap-2">
         <Badge tone="accent">{tier}</Badge>
         <Badge>{status}</Badge>
         <Badge tone="warn">{visibility}</Badge>
         <Badge>{priority}</Badge>
-        {data.tokenSymbol ? <Badge>${data.tokenSymbol}</Badge> : <Badge>no token</Badge>}
+        {data.tokenSymbol ? <Badge>${data.tokenSymbol}</Badge> : <Badge>no token yet</Badge>}
       </div>
 
-      <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-accent">
-          Why it&apos;s interesting
-        </h3>
-        <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
-          {interesting || "No write-up recorded yet."}
-        </p>
-      </div>
+      <Section
+        title="Why it’s interesting"
+        body={interesting || "No plain-English write-up recorded yet."}
+      />
+      <Section
+        title="What’s holding it back"
+        body={data.whatsHoldingBack?.trim() || "Not recorded yet."}
+        tone="warn"
+      />
+      <Section
+        title="Biggest unanswered question"
+        body={data.researchQuestion?.trim() || "Not recorded yet."}
+        tone="emphasis"
+      />
+      <Section
+        title="What would change our mind"
+        body={data.whatWouldChangeThesis?.trim() || "Not recorded yet."}
+      />
+      <Section title="What to watch next" body={data.whatToWatch?.trim() || "Not recorded yet."} />
 
-      <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-warn">
-          What&apos;s holding it back
-        </h3>
-        <p className="mt-1.5 whitespace-pre-wrap text-ink-200">
-          {data.whatsHoldingBack?.trim() || "Not recorded yet."}
-        </p>
-      </div>
-
-      <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-100">
-          Biggest unanswered question
-        </h3>
-        <p className="mt-1.5 whitespace-pre-wrap text-ink-100">
-          {data.researchQuestion?.trim() || "Not recorded yet."}
-        </p>
-      </div>
-
-      <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">
-          What would change the thesis
-        </h3>
-        <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
-          {data.whatWouldChangeThesis?.trim() || "Not recorded yet."}
-        </p>
-      </div>
-
-      <div>
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-ink-500">What to watch</h3>
-        <p className="mt-1.5 whitespace-pre-wrap text-ink-300">
-          {data.whatToWatch?.trim() || "Not recorded yet."}
-        </p>
-      </div>
-
-      <p className="font-mono text-[10px] text-ink-600">
-        Build visibility ≠ status. Stale public commits ≠ dormant if development is private. Adoption
-        confidence: {data.adoptionConfidence ?? 0}/10 · activity origin:{" "}
+      <p className="text-xs leading-relaxed text-ink-500">
+        Quiet public GitHub does not automatically mean the project is dead — work can be private.
+        Adoption confidence: {data.adoptionConfidence ?? 0}/10. Activity origin:{" "}
         {(data.activityOrigin ?? "unknown").replace(/_/g, " ")}.
       </p>
     </div>
@@ -120,15 +128,26 @@ export function WhyWriteupButton({ data }: { data: WhyWriteupData }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  const preview =
+    data.writeup?.trim() ||
+    data.trackingReason?.trim() ||
+    data.shortDescription?.trim() ||
+    null;
+
   return (
     <>
-      <button
-        type="button"
-        className="font-mono text-[10px] uppercase tracking-wider text-accent hover:underline"
-        onClick={() => setOpen(true)}
-      >
-        Why
-      </button>
+      <div className="max-w-[14rem]">
+        {preview ? (
+          <p className="mb-1 line-clamp-2 text-xs leading-snug text-ink-400">{preview}</p>
+        ) : null}
+        <button
+          type="button"
+          className="text-left text-xs font-medium text-accent hover:underline"
+          onClick={() => setOpen(true)}
+        >
+          Plain English →
+        </button>
+      </div>
 
       {open ? (
         <div
@@ -147,9 +166,7 @@ export function WhyWriteupButton({ data }: { data: WhyWriteupData }) {
                 <h2 id={titleId} className="font-display text-2xl text-ink-100">
                   {data.name}
                 </h2>
-                <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-500">
-                  Living research note
-                </p>
+                <p className="mt-0.5 text-xs text-ink-500">Plain-English research note</p>
               </div>
               <button type="button" className="btn" onClick={() => setOpen(false)} aria-label="Close">
                 Close
@@ -159,7 +176,11 @@ export function WhyWriteupButton({ data }: { data: WhyWriteupData }) {
             <WhyWriteupBody data={data} />
 
             <div className="mt-6 flex gap-2 border-t border-ink-800 pt-4">
-              <Link href={`/projects/${data.slug}#why`} className="btn btn-primary" onClick={() => setOpen(false)}>
+              <Link
+                href={`/projects/${data.slug}#why`}
+                className="btn btn-primary"
+                onClick={() => setOpen(false)}
+              >
                 Full project page
               </Link>
               <button type="button" className="btn" onClick={() => setOpen(false)}>
