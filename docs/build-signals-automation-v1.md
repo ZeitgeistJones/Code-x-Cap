@@ -11,21 +11,26 @@ not infer private activity, adoption, revenue, security, or token demand.
 The route:
 
 1. Creates a `job_runs` row with `job_name = daily_upkeep` and `status = running`.
-2. Runs the existing all-repository GitHub refresh.
-3. Groups same-project meaningful commits found that UTC day into one sourced `Build update`.
-4. Runs the existing current-token market refresh using chain ID plus exact contract address.
-5. Updates the job run with final status, timestamps, counts, and short error summaries.
+2. Stores the fixed repository and current exact-contract token lists in `job_runs.metadata`.
+3. Refreshes at most one GitHub repository and one token concurrently per request.
+4. Saves cursors, cumulative counts, errors, and a heartbeat after every request.
+5. Groups same-project meaningful commits found during the run into one sourced `Build update`.
+6. Updates the job run with final status, timestamps, counts, and short error summaries.
 
-One repository or token failure does not abort the rest of the job. A run with partial failures is
-stored as `partial`; a fully successful run is `succeeded`; a run that processes nothing is
-`failed`.
+The short requests avoid Vercel's per-function time limit. One repository or token failure does not
+abort the rest of the job. A run with partial failures is stored as `partial`; a fully successful
+run is `succeeded`; a run that processes nothing is `failed`.
 
 ### Run it from the app
 
 1. Unlock the private app with the existing admin key.
 2. Open the home page.
 3. Click **Run daily upkeep**.
-4. Wait for the result dialog showing GitHub, token, event, and grouped-update counts.
+4. Keep the page open while the button shows saved `processed/total` progress.
+5. Wait for the result dialog showing GitHub, token, event, and grouped-update counts.
+
+One click automatically makes the repeated short requests. If the browser or network interrupts
+the sequence, click **Run daily upkeep** again within 30 minutes to resume the saved job.
 
 ### Call it as an authenticated request
 
@@ -33,6 +38,10 @@ The route accepts either:
 
 - The existing unlocked admin cookie, used by the app button.
 - An `x-admin-key` header whose value matches `ADMIN_KEY`.
+
+The first authenticated `POST` may use an empty JSON object. It returns HTTP `202`, a `jobRunId`,
+progress, and `complete: false`. Repeat authenticated `POST` requests with
+`{"jobRunId":"returned-id"}` until the route returns HTTP `200` and `complete: true`.
 
 Do not put the admin key in a public client or URL.
 
@@ -53,10 +62,11 @@ Do not put the admin key in a public client or URL.
 
 ## Intended schedule
 
-The route is ready for one authenticated call per day, preferably during a consistent low-traffic
-UTC hour. Vercel Cron is deliberately not configured in V1 because this repository had no existing
-cron convention. Add scheduling only after a manual full run confirms the job reliably fits the
-deployment's function timeout.
+The upkeep job is ready to start once per day, preferably during a consistent low-traffic UTC hour.
+Vercel Cron is deliberately not configured in V1 because a Cron invocation makes only one request,
+while this job now requires repeated continuation calls. A future unattended schedule must use a
+durable workflow or another authenticated scheduler that keeps calling the route with the returned
+`jobRunId` until `complete` is true.
 
 ## Candidate admission
 
@@ -105,8 +115,12 @@ All labels and explanations are deterministic code templates. No LLM is used.
 
 ## Known limitations
 
-- Vercel Hobby functions have a limited execution window. A large repository/token set can produce
-  a partial run; the job record preserves completed work and errors.
+- Each route invocation processes only one repository and one token. The app must remain open while
+  it sends continuation requests, or the user must click again within 30 minutes to resume.
+- A running job with no saved heartbeat for 30 minutes is marked failed when upkeep is started
+  again. Already written GitHub activity, events, and market snapshots remain preserved.
+- Automated daily scheduling still needs a durable continuation caller; Vercel Cron alone performs
+  only the first step.
 - Public GitHub and market APIs can rate-limit or return incomplete data.
 - Public commits do not prove that code is deployed, adopted, complete, secure, or connected to
   token economics.

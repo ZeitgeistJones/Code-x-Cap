@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertAdminApiAccess } from "@/lib/admin-api-auth";
-import { runDailyUpkeep } from "@/lib/runDailyUpkeep";
+import { runDailyUpkeepStep } from "@/lib/runDailyUpkeep";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,7 +11,22 @@ export async function POST(request: Request) {
   if (denied) return denied;
 
   try {
-    return NextResponse.json(await runDailyUpkeep());
+    const raw = await request.text();
+    let jobRunId: string | undefined;
+    if (raw.trim()) {
+      const body: unknown = JSON.parse(raw);
+      if (!body || typeof body !== "object") {
+        return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      }
+      const candidate = (body as Record<string, unknown>).jobRunId;
+      if (candidate != null && typeof candidate !== "string") {
+        return NextResponse.json({ error: "jobRunId must be a string" }, { status: 400 });
+      }
+      if (typeof candidate === "string") jobRunId = candidate;
+    }
+
+    const result = await runDailyUpkeepStep(jobRunId);
+    return NextResponse.json(result, { status: result.complete ? 200 : 202 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Daily upkeep failed";
     console.error("daily-upkeep failed", error);
