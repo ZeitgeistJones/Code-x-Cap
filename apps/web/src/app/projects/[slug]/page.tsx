@@ -31,6 +31,17 @@ import { getProjectBySlug } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
+const BUILD_SIGNAL_EVENT_TYPES = new Set([
+  "meaningful_commit",
+  "release",
+  "product_launch",
+  "liquidity_threshold",
+  "market_cap_threshold",
+  "token_migration",
+  "repo_private",
+  "dormant",
+]);
+
 export default async function ProjectDetailPage({
   params,
 }: {
@@ -42,6 +53,21 @@ export default async function ProjectDetailPage({
 
   const signalMap = Object.fromEntries(project.signals.map((s) => [s.signalType, s]));
   const scoreMap = Object.fromEntries(project.scores.map((s) => [s.dimension, s]));
+  const groupedEventDays = new Set(
+    project.events
+      .filter((event) => event.metadata?.groupedBuildUpdate === true)
+      .map((event) => new Date(event.timestamp).toISOString().slice(0, 10)),
+  );
+  const eligibleEvents = project.events.filter((event) => {
+    if (!BUILD_SIGNAL_EVENT_TYPES.has(event.eventType) || !event.sourceUrl) return false;
+    if (event.eventType !== "meaningful_commit") return true;
+    const score = event.metadata?.score;
+    if (typeof score !== "number" || score < 5) return false;
+    const day = new Date(event.timestamp).toISOString().slice(0, 10);
+    return event.metadata?.groupedBuildUpdate === true || !groupedEventDays.has(day);
+  });
+  const eligibleIds = new Set(eligibleEvents.map((event) => event.id));
+  const otherEvents = project.events.filter((event) => !eligibleIds.has(event.id));
 
   return (
     <div className="space-y-8">
@@ -108,7 +134,7 @@ export default async function ProjectDetailPage({
       <section id="why" className="panel scroll-mt-6 border-accent/20 p-5">
         <h2 className="font-display text-xl text-ink-100">Research write-up</h2>
         <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-500">
-          Living research · not a buy signal
+          Public-evidence research · uncertainty preserved
         </p>
         <div className="mt-4 space-y-5 text-sm leading-relaxed">
           <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
@@ -552,9 +578,9 @@ export default async function ProjectDetailPage({
 
       {/* Timeline */}
       <section>
-        <h2 className="section-title">Activity timeline</h2>
+        <h2 className="section-title">Build Signals activity</h2>
         <ol className="mt-3 space-y-0 border-l border-ink-700 pl-4">
-          {project.events.map((e) => (
+          {eligibleEvents.map((e) => (
             <li key={e.id} className="relative pb-4">
               <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-accent bg-ink-950" />
               <div className="font-mono text-[10px] text-ink-500">
@@ -563,10 +589,56 @@ export default async function ProjectDetailPage({
               </div>
               <div className="text-sm text-ink-100">{e.title}</div>
               {e.description ? <p className="text-xs text-ink-500">{e.description}</p> : null}
+              <a
+                href={e.sourceUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[10px] text-accent hover:underline"
+              >
+                Public source ↗
+              </a>
             </li>
           ))}
-          {project.events.length === 0 ? <li className="text-sm text-ink-500">No events yet</li> : null}
+          {eligibleEvents.length === 0 ? (
+            <li className="text-sm text-ink-500">No eligible sourced Build Signals yet.</li>
+          ) : null}
         </ol>
+
+        <h3 className="section-title mt-5">Other public activity</h3>
+        <p className="mt-1 text-xs text-ink-500">
+          Lower-confidence or feed-ineligible records are preserved here for review.
+        </p>
+        <ol className="mt-3 space-y-0 border-l border-ink-800 pl-4">
+          {otherEvents.map((e) => (
+            <li key={e.id} className="relative pb-4">
+              <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border border-ink-600 bg-ink-950" />
+              <div className="font-mono text-[10px] text-ink-500">
+                {new Date(e.timestamp).toISOString().slice(0, 16).replace("T", " ")} · {e.eventType} ·{" "}
+                {e.severity}
+              </div>
+              <div className="text-sm text-ink-100">{e.title}</div>
+              {e.description ? <p className="text-xs text-ink-500">{e.description}</p> : null}
+              {e.sourceUrl ? (
+                <a
+                  href={e.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-[10px] text-accent hover:underline"
+                >
+                  Public source ↗
+                </a>
+              ) : (
+                <span className="font-mono text-[10px] text-ink-600">
+                  Source unknown / not verified
+                </span>
+              )}
+            </li>
+          ))}
+          {otherEvents.length === 0 ? (
+            <li className="text-sm text-ink-500">No other activity recorded.</li>
+          ) : null}
+        </ol>
+
         <form action={addEventAction} className="mt-3 grid gap-2 panel p-3 sm:grid-cols-2">
           <input type="hidden" name="projectId" value={project.id} />
           <input type="hidden" name="slug" value={project.slug} />

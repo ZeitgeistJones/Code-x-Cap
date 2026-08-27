@@ -2,6 +2,7 @@ import {
   activitySignals,
   evidence,
   events,
+  githubActivities,
   githubRepositories,
   notes,
   projectTags,
@@ -11,9 +12,30 @@ import {
   tokens,
   watchlistItems,
 } from "@codexcap/db/schema";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { codeDisplayForProject, pickPrimaryRepo, recencyBadge } from "@codexcap/core";
 import { db } from "@/lib/db";
+import {
+  buildSignalCopy,
+  classifyBuildEvidence,
+  classifyIdentity,
+  classifyMarketContext,
+  type BuildEvidenceLabel,
+  type BuildSignalEventType,
+  type IdentityLabel,
+  type MarketContextLabel,
+} from "@/lib/buildSignals";
 import { projectGithubStats } from "@/lib/github";
 import { latestSnapshotsByTokenIds } from "@/lib/market";
 import { ensureSchemaReady } from "@/lib/schema-ready";
@@ -296,4 +318,241 @@ export async function searchGlobal(q: string) {
   ]);
 
   return { projects: proj, tokens: tok, repos };
+}
+
+const CANDIDATE_STATUSES = ["candidate", "researching", "pre_token", "unverified"];
+
+/** Private review queue data, loaded in batches to avoid per-candidate queries. */
+export async function listCandidateProjects() {
+  await ensureSchemaReady();
+  const database = db();
+  const projectRows = await database
+    .select()
+    .from(projects)
+    .where(inArray(projects.projectStatus, CANDIDATE_STATUSES))
+    .orderBy(desc(projects.updatedAt));
+
+  if (projectRows.length === 0) return [];
+  const projectIds = projectRows.map((project) => project.id);
+  const [tokenRows, repoRows, evidenceRows] = await Promise.all([
+    database
+      .select()
+      .from(tokens)
+      .where(and(inArray(tokens.projectId, projectIds), eq(tokens.isCurrent, true))),
+    database.select().from(githubRepositories).where(inArray(githubRepositories.projectId, projectIds)),
+    database.select().from(evidence).where(inArray(evidence.projectId, projectIds)),
+  ]);
+
+  return projectRows.map((project) => {
+    const currentToken = tokenRows.find((token) => token.projectId === project.id) ?? null;
+    const repositories = repoRows.filter((repository) => repository.projectId === project.id);
+    const projectEvidence = evidenceRows.filter((item) => item.projectId === project.id);
+    const publicRepositories = repositories.filter((repository) => !repository.privateOrMissing);
+    const latestGithubAt =
+      repositories
+        .flatMap((repository) =>
+          [repository.latestMeaningfulCommitAt, repository.latestCommitAt].filter(
+            (value): value is Date => Boolean(value),
+          ),
+        )
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+    return {
+      ...project,
+      currentToken,
+      repositories,
+      evidence: projectEvidence,
+      latestGithubAt,
+      missingBeforeTracking: {
+        officialIdentitySource: !Boolean(project.websiteUrl || project.twitterUrl),
+        publicGithubRepository: publicRepositories.length === 0,
+        exactContractSource: !Boolean(
+          currentToken?.contractAddress?.trim() && currentToken.sourceUrl?.trim(),
+        ),
+        writtenReasonToTrack: !Boolean(project.trackingReason?.trim()),
+      },
+    };
+  });
+}
+
+export interface RecentBuildSignalFilters {
+  since: Date;
+  limit: number;
+  buildEvidence?: BuildEvidenceLabel;
+  identity?: IdentityLabel;
+  market?: MarketContextLabel;
+}
+
+const BUILD_SIGNAL_EVENT_TYPES: BuildSignalEventType[] = [
+  "meaningful_commit",
+  "release",
+  "product_launch",
+  "liquidity_threshold",
+  "market_cap_threshold",
+  "token_migration",
+  "repo_private",
+  "dormant",
+];
+
+function eventScore(metadata: Record<string, unknown> | null, description: string | null) {
+  const value = metadata?.score;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const match = description?.match(/score\s+(\d+(?:\.\d+)?)\/10/i);
+  return match ? Number(match[1]) : null;
+}
+
+function eventClassification(metadata: Record<string, unknown> | null) {
+  const value = metadata?.classification;
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/**
+ * Read-only Build Signals feed. All joins are batch queries; mapping and labels
+ * are deterministic and happen in memory.
+ */
+export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
+  await ensureSchemaReady();
+  const database = db();
+  const fetchLimit = Math.max(filters.limit * 8, 80);
+  const eventRows = await database
+    .select()
+    .from(events)
+    .where(
+      and(
+        gte(events.timestamp, filters.since),
+        inArray(events.eventType, BUILD_SIGNAL_EVENT_TYPES),
+        isNotNull(events.sourceUrl),
+      ),
+    )
+    .orderBy(desc(events.timestamp))
+    .limit(fetchLimit);
+
+  if (eventRows.length === 0) return [];
+  const projectIds = [...new Set(eventRows.map((event) => event.projectId))];
+  const projectRows = await database
+    .select()
+    .from(projects)
+    .where(
+      and(
+        inArray(projects.id, projectIds),
+        notInArray(projects.projectStatus, ["rejected", "archived"]),
+      ),
+    );
+  if (projectRows.length === 0) return [];
+
+  const eligibleProjectIds = projectRows.map((project) => project.id);
+  const [tokenRows, repoRows] = await Promise.all([
+    database
+      .select()
+      .from(tokens)
+      .where(and(inArray(tokens.projectId, eligibleProjectIds), eq(tokens.isCurrent, true))),
+    database
+      .select()
+      .from(githubRepositories)
+      .where(inArray(githubRepositories.projectId, eligibleProjectIds)),
+  ]);
+  const repositoryIds = repoRows.map((repository) => repository.id);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
+  const meaningfulActivities =
+    repositoryIds.length > 0
+      ? await database
+          .select({
+            repositoryId: githubActivities.repositoryId,
+            score: githubActivities.meaningfulScore,
+          })
+          .from(githubActivities)
+          .where(
+            and(
+              inArray(githubActivities.repositoryId, repositoryIds),
+              gte(githubActivities.timestamp, thirtyDaysAgo),
+              gte(githubActivities.meaningfulScore, 5),
+            ),
+          )
+      : [];
+
+  const snapshotMap = await latestSnapshotsByTokenIds(tokenRows.map((token) => token.id));
+  const projectMap = new Map(projectRows.map((project) => [project.id, project]));
+  const groupedDays = new Set(
+    eventRows
+      .filter((event) => event.metadata?.groupedBuildUpdate === true)
+      .map((event) => `${event.projectId}:${event.timestamp.toISOString().slice(0, 10)}`),
+  );
+
+  const mapped = eventRows
+    .filter((event) => {
+      if (!projectMap.has(event.projectId) || !event.sourceUrl) return false;
+      if (event.eventType !== "meaningful_commit") return true;
+      const score = eventScore(event.metadata, event.description);
+      if (score == null || score < 5) return false;
+      const dayKey = `${event.projectId}:${event.timestamp.toISOString().slice(0, 10)}`;
+      return event.metadata?.groupedBuildUpdate === true || !groupedDays.has(dayKey);
+    })
+    .map((event) => {
+      const project = projectMap.get(event.projectId)!;
+      const currentToken = tokenRows.find((token) => token.projectId === project.id) ?? null;
+      const snapshot = currentToken ? snapshotMap.get(currentToken.id) ?? null : null;
+      const repositories = repoRows.filter((repository) => repository.projectId === project.id);
+      const repoIds = new Set(repositories.map((repository) => repository.id));
+      const meaningfulCommits30d = meaningfulActivities.filter((activity) =>
+        repoIds.has(activity.repositoryId),
+      ).length;
+      const score = eventScore(event.metadata, event.description);
+      const classification = eventClassification(event.metadata);
+      const eventType = event.eventType as BuildSignalEventType;
+      const buildEvidence = classifyBuildEvidence({
+        eventType,
+        meaningfulScore: score,
+        meaningfulCommits30d,
+        verifiedEvent:
+          event.confirmed && (eventType === "release" || eventType === "product_launch"),
+      });
+      const identity = classifyIdentity({
+        identityConfidence: project.identityConfidence,
+        hasExactContract: Boolean(currentToken?.contractAddress),
+        tokenSourceUrl: currentToken?.sourceUrl ?? null,
+        contractVerified: currentToken?.contractVerified ?? false,
+        hasPublicRepository: repositories.some((repository) => !repository.privateOrMissing),
+      });
+      const market = classifyMarketContext({
+        snapshotAt: snapshot?.timestamp ?? null,
+        liquidityUsd: snapshot?.liquidityUsd ? Number(snapshot.liquidityUsd) : null,
+      });
+
+      return {
+        id: event.id,
+        project: {
+          id: project.id,
+          slug: project.slug,
+          name: project.name,
+        },
+        event: {
+          type: eventType,
+          title: event.title,
+          description: event.description,
+          timestamp: event.timestamp,
+          sourceUrl: event.sourceUrl,
+          classification,
+          meaningfulScore: score,
+        },
+        currentToken,
+        marketSnapshot: snapshot,
+        labels: { buildEvidence, identity, market },
+        copy: buildSignalCopy({
+          projectName: project.name,
+          eventType,
+          classification,
+          meaningfulScore: score,
+          happenedAt: event.timestamp,
+        }),
+      };
+    })
+    .filter((signal) => {
+      if (filters.buildEvidence && signal.labels.buildEvidence !== filters.buildEvidence) return false;
+      if (filters.identity && signal.labels.identity !== filters.identity) return false;
+      if (filters.market && signal.labels.market !== filters.market) return false;
+      return true;
+    });
+
+  return mapped.slice(0, Math.max(1, filters.limit));
 }

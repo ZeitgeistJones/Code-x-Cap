@@ -7,9 +7,11 @@ import {
   TOKEN_STATUSES,
   formatUsdCompact,
 } from "@codexcap/core";
-import { listAllTags, listProjects } from "@/lib/queries";
+import { getRecentBuildSignals, listAllTags, listProjects } from "@/lib/queries";
 import { RecencyPill, StatusPill } from "@/components/Badges";
+import { BuildSignalCard } from "@/components/BuildSignalCard";
 import { BuildCodeCell } from "@/components/BuildCodeCell";
+import { DailyUpkeepButton } from "@/components/DailyUpkeepButton";
 import { FilterBar } from "@/components/FilterBar";
 import { RefreshGithubButton } from "@/components/RefreshGithubButton";
 import { RefreshMarketsButton } from "@/components/RefreshMarketsButton";
@@ -41,21 +43,38 @@ export default async function HomePage({
 
   let projects: Awaited<ReturnType<typeof listProjects>> = [];
   let tags: Awaited<ReturnType<typeof listAllTags>> = [];
+  let buildSignals: Awaited<ReturnType<typeof getRecentBuildSignals>> = [];
   let dbError: string | null = null;
 
-  try {
-    [projects, tags] = await Promise.all([listProjects(filters), listAllTags()]);
-  } catch (e) {
-    dbError = e instanceof Error ? e.message : "Database error";
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 30);
+  const [projectsResult, tagsResult, signalsResult] = await Promise.allSettled([
+    listProjects(filters),
+    listAllTags(),
+    getRecentBuildSignals({ since, limit: 8 }),
+  ]);
+  if (projectsResult.status === "fulfilled") projects = projectsResult.value;
+  else {
+    dbError =
+      projectsResult.reason instanceof Error ? projectsResult.reason.message : "Database error";
   }
+  if (tagsResult.status === "fulfilled") tags = tagsResult.value;
+  else if (!dbError) {
+    dbError = tagsResult.reason instanceof Error ? tagsResult.reason.message : "Database error";
+  }
+  if (signalsResult.status === "fulfilled") buildSignals = signalsResult.value;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl text-ink-100">Projects</h1>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-ink-500">CODE × CAP</p>
+          <h1 className="font-display text-2xl text-ink-100">Build Signals</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-400">
-            Manual research database. Refresh GitHub for meaningful code; refresh markets for mcap.
+            Verified GitHub activity and token market context—explained in plain English.
+            <br />
+            We show public evidence, source links, and uncertainty. This is research, not a trade
+            call.
             {projects.length > 0 ? (
               <span className="ml-1 text-ink-500">· {projects.length} loaded</span>
             ) : null}
@@ -65,6 +84,7 @@ export default async function HomePage({
           <SeedResearchButton />
           <RefreshGithubButton />
           <RefreshMarketsButton />
+          <DailyUpkeepButton />
           <Link href="/projects/new" className="btn btn-primary">
             Add project
           </Link>
@@ -94,6 +114,28 @@ export default async function HomePage({
           Hivra, Delu, HEIR, APINow, StarkBot, and the rest.
         </div>
       ) : null}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="section-title">Recent Build Signals</h2>
+          <p className="mt-1 text-xs text-ink-500">
+            Deterministic summaries of sourced public events. No automated claim is treated as
+            proof of adoption.
+          </p>
+        </div>
+        {buildSignals.length > 0 ? (
+          <div className="space-y-3">
+            {buildSignals.map((signal) => (
+              <BuildSignalCard key={signal.id} signal={signal} />
+            ))}
+          </div>
+        ) : (
+          <div className="panel p-4 text-sm text-ink-500">
+            No eligible sourced Build Signals in the last 30 days. Run daily upkeep to refresh
+            public evidence.
+          </div>
+        )}
+      </section>
 
       <Suspense fallback={<div className="panel p-3 text-xs text-ink-500">Loading filters…</div>}>
         <FilterBar

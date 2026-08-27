@@ -10,7 +10,7 @@ export function AppNav() {
             CODE × CAP
           </span>
           <span className="hidden font-mono text-[10px] uppercase tracking-widest text-ink-600 sm:inline">
-            builder intelligence
+            Build Signals
           </span>
         </Link>
         <nav className="flex flex-1 items-center gap-4 font-mono text-xs uppercase tracking-wide text-ink-400">
@@ -22,6 +22,9 @@ export function AppNav() {
           </Link>
           <Link href="/watchlist" className="hover:text-accent">
             Watchlist
+          </Link>
+          <Link href="/admin/candidates" className="hover:text-accent">
+            Candidates
           </Link>
           <Link href="/tags" className="hover:text-accent">
             Tags
