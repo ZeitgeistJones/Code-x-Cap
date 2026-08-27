@@ -26,7 +26,21 @@ export function DailyUpkeepButton() {
         method: "POST",
         credentials: "include",
       });
-      const result = (await response.json()) as DailyUpkeepResponse;
+      const raw = await response.text();
+      let result: DailyUpkeepResponse;
+      try {
+        result = JSON.parse(raw) as DailyUpkeepResponse;
+      } catch {
+        const timedOut = response.status === 504 || /timed?\s*out|task timeout/i.test(raw);
+        window.alert(
+          timedOut
+            ? "Daily upkeep reached Vercel’s time limit. Completed refresh records were preserved. " +
+                "The next run will close the interrupted job record."
+            : `Daily upkeep returned an unreadable server response (${response.status}). ` +
+                `${raw.replace(/\s+/g, " ").slice(0, 160) || "No response body."}`,
+        );
+        return;
+      }
       if (!response.ok) {
         window.alert(result.error ?? `Daily upkeep failed (${response.status})`);
         return;

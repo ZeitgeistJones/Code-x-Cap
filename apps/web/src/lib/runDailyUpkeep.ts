@@ -6,7 +6,7 @@
 
 import { createHash } from "node:crypto";
 import { events, jobRuns } from "@codexcap/db/schema";
-import { and, asc, eq, gte } from "drizzle-orm";
+import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { refreshAllGithub } from "@/lib/github";
 import { refreshAllCurrentTokenMarkets } from "@/lib/market";
@@ -53,6 +53,25 @@ function stringFromMetadata(
 export async function runDailyUpkeep(): Promise<DailyUpkeepResult> {
   const database = db();
   const startedAt = new Date();
+
+  // A hard platform timeout cannot execute our catch/finalizer. On the next
+  // attempt, close old "running" rows so operators never see zombie jobs.
+  const staleBefore = new Date(startedAt.getTime() - 2 * 60 * 1000);
+  await database
+    .update(jobRuns)
+    .set({
+      status: "failed",
+      finishedAt: startedAt,
+      error: "Interrupted before completion (platform timeout or terminated invocation).",
+    })
+    .where(
+      and(
+        eq(jobRuns.jobName, "daily_upkeep"),
+        eq(jobRuns.status, "running"),
+        lt(jobRuns.startedAt, staleBefore),
+      ),
+    );
+
   const [jobRun] = await database
     .insert(jobRuns)
     .values({
@@ -76,18 +95,40 @@ export async function runDailyUpkeep(): Promise<DailyUpkeepResult> {
   };
   let groupedBuildUpdatesCreated = 0;
 
-  try {
-    const results = await refreshAllGithub();
-    github.processed = results.length;
-    github.successful = results.filter((result) => result.ok).length;
-    github.failed = results.length - github.successful;
+  // GitHub and market refreshes are independent. Running them concurrently is
+  // required to keep the complete upkeep pass inside Vercel's 60-second limit.
+  const [githubStage, marketStage] = await Promise.allSettled([
+    refreshAllGithub(),
+    refreshAllCurrentTokenMarkets(),
+  ]);
+
+  if (githubStage.status === "fulfilled") {
+    github.processed = githubStage.value.length;
+    github.successful = githubStage.value.filter((result) => result.ok).length;
+    github.failed = githubStage.value.length - github.successful;
     errors.push(
-      ...results
+      ...githubStage.value
         .filter((result) => !result.ok)
         .map((result) => shortError(`GitHub ${result.fullName}`, result.error ?? "refresh failed")),
     );
-  } catch (error) {
-    errors.push(shortError("GitHub stage", error));
+  } else {
+    errors.push(shortError("GitHub stage", githubStage.reason));
+  }
+
+  if (marketStage.status === "fulfilled") {
+    tokens.processed = marketStage.value.results.length;
+    tokens.successful = marketStage.value.results.filter((result) => result.ok).length;
+    tokens.failed = marketStage.value.results.length - tokens.successful;
+    tokens.skipped = marketStage.value.skippedNoCa.length;
+    errors.push(
+      ...marketStage.value.results
+        .filter((result) => !result.ok)
+        .map((result) =>
+          shortError(`Market ${result.symbol ?? result.tokenId}`, result.error ?? "refresh failed"),
+        ),
+    );
+  } else {
+    errors.push(shortError("Market stage", marketStage.reason));
   }
 
   try {
@@ -169,27 +210,16 @@ export async function runDailyUpkeep(): Promise<DailyUpkeepResult> {
     errors.push(shortError("Build update grouping", error));
   }
 
+  let newEventsCreated = 0;
   try {
-    const summary = await refreshAllCurrentTokenMarkets();
-    tokens.processed = summary.results.length;
-    tokens.successful = summary.results.filter((result) => result.ok).length;
-    tokens.failed = summary.results.length - tokens.successful;
-    tokens.skipped = summary.skippedNoCa.length;
-    errors.push(
-      ...summary.results
-        .filter((result) => !result.ok)
-        .map((result) =>
-          shortError(`Market ${result.symbol ?? result.tokenId}`, result.error ?? "refresh failed"),
-        ),
-    );
+    const newEvents = await database
+      .select({ id: events.id })
+      .from(events)
+      .where(gte(events.createdAt, startedAt));
+    newEventsCreated = newEvents.length;
   } catch (error) {
-    errors.push(shortError("Market stage", error));
+    errors.push(shortError("Event count", error));
   }
-
-  const newEvents = await database
-    .select({ id: events.id })
-    .from(events)
-    .where(gte(events.createdAt, startedAt));
 
   const processed = github.processed + tokens.processed;
   const stageSucceeded = github.processed > 0 || tokens.processed > 0;
@@ -208,7 +238,7 @@ export async function runDailyUpkeep(): Promise<DailyUpkeepResult> {
       metadata: {
         github,
         tokens,
-        newEventsCreated: newEvents.length,
+        newEventsCreated,
         groupedBuildUpdatesCreated,
         errors,
       },
@@ -222,7 +252,7 @@ export async function runDailyUpkeep(): Promise<DailyUpkeepResult> {
     finishedAt: finishedAt.toISOString(),
     github,
     tokens,
-    newEventsCreated: newEvents.length,
+    newEventsCreated,
     groupedBuildUpdatesCreated,
     errors,
   };
