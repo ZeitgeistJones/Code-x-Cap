@@ -87,7 +87,7 @@ function extractJsonObject(raw: string): unknown {
 }
 
 function sanitizeCopy(copy: BuildSignalCopy): BuildSignalCopy {
-  const clean = (value: string) => value.replace(/\s+/g, " ").trim().slice(0, 700);
+  const clean = (value: string) => value.replace(/\s+/g, " ").trim().slice(0, 180);
   return {
     whatHappened: clean(copy.whatHappened),
     whyItMayMatter: clean(copy.whyItMayMatter),
@@ -120,15 +120,18 @@ export async function explainBuildSignalWithGemini(
 
   const model = geminiModel();
   const prompt = [
-    "You write plain-English research notes for CODE × CAP Build Signals.",
-    "Audience: non-technical readers who want to understand GitHub activity vs a crypto token.",
-    "Use ONLY the JSON facts below. Do not invent users, revenue, security audits, partnerships, or token demand.",
-    "If a token↔code link is not proven by the facts, say it is unknown / not verified.",
-    "Never give buy/sell/price advice. Never say a token should go up or down.",
-    "Name the token symbol when present. Mention chain + shortened contract when present.",
-    "Keep each field to 1-3 short sentences. Concrete beats generic.",
-    "tokenRelation must explicitly discuss how (or whether) this public build event relates to the tracked token.",
-    "Return ONLY JSON with keys: whatHappened, whyItMayMatter, tokenRelation, whatWeDoNotKnow, whatToWatchNext.",
+    "Write a short research update for non-technical readers.",
+    "Use ONLY the JSON facts. Do not invent users, revenue, audits, partnerships, or price moves.",
+    "If code↔token link is unproven, say unknown / not verified.",
+    "No buy/sell advice.",
+    "Style: easy-to-read update, not a compliance memo. No repeated disclaimers.",
+    "Each field MUST be one short sentence (max ~18 words).",
+    "whatHappened = what publicly changed.",
+    "tokenRelation = how this does/doesn't relate to the tracked token.",
+    "whyItMayMatter = why a follower might care.",
+    "whatWeDoNotKnow = one concrete unknown.",
+    "whatToWatchNext = one concrete next public sign.",
+    "Return ONLY JSON with those five keys.",
     "",
     "FACTS:",
     factsBlock(input),

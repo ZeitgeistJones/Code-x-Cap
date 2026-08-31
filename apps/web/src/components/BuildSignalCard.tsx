@@ -1,12 +1,4 @@
 import Link from "next/link";
-import {
-  BUILD_EVIDENCE_EXPLAIN,
-  IDENTITY_EXPLAIN,
-  MARKET_CONTEXT_EXPLAIN,
-  type BuildEvidenceLabel,
-  type IdentityLabel,
-  type MarketContextLabel,
-} from "@/lib/buildSignals";
 import type { getRecentBuildSignals } from "@/lib/queries";
 
 type BuildSignal = Awaited<ReturnType<typeof getRecentBuildSignals>>[number];
@@ -16,117 +8,67 @@ function shortAddress(value: string): string {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
-function LabelChip({
-  title,
-  value,
-  explain,
-}: {
-  title: string;
-  value: string;
-  explain: string;
-}) {
-  return (
-    <div className="max-w-[16rem] border border-ink-700 px-2 py-1.5">
-      <p className="font-mono text-[9px] uppercase tracking-wider text-ink-500">
-        {title}: <span className="text-ink-200">{value}</span>
-      </p>
-      <p className="mt-0.5 text-xs leading-snug text-ink-400">{explain}</p>
-    </div>
-  );
-}
-
-function Section({
-  title,
-  body,
-  emphasis = false,
-}: {
-  title: string;
-  body: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <section className={emphasis ? "border border-accent/25 bg-accent-muted/20 p-3" : undefined}>
-      <h3 className={`text-sm font-medium ${emphasis ? "text-accent" : "text-ink-100"}`}>{title}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-ink-300">{body}</p>
-    </section>
-  );
+function formatUsd(value: string | number | null | undefined): string | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${Math.round(n).toLocaleString()}`;
 }
 
 export function BuildSignalCard({ signal }: { signal: BuildSignal }) {
   const snapshot = signal.marketSnapshot;
-  const build = signal.labels.buildEvidence as BuildEvidenceLabel;
-  const identity = signal.labels.identity as IdentityLabel;
-  const market = signal.labels.market as MarketContextLabel;
-  const when = signal.event.timestamp.toISOString().slice(0, 16).replace("T", " ");
   const token = signal.currentToken;
-  const tokenLabel = token?.symbol ? `$${token.symbol}` : "token unknown";
+  const tokenLabel = token?.symbol ? `$${token.symbol}` : null;
+  const when = signal.event.timestamp.toISOString().slice(0, 10);
+  const marketBits = [
+    formatUsd(snapshot?.marketCap),
+    formatUsd(snapshot?.liquidityUsd) ? `${formatUsd(snapshot?.liquidityUsd)} liq` : null,
+  ].filter(Boolean);
 
   return (
-    <article className="panel p-5">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-800 pb-3">
-        <div>
-          <p className="text-xs text-ink-500">
-            Build signal · {tokenLabel}
-            {token?.chain ? ` · ${token.chain}` : ""}
-            {signal.copySource === "gemini"
-              ? " · Gemini rewrite from public evidence"
-              : " · template copy (add GEMINI_API_KEY + run upkeep for plain-English rewrite)"}
-          </p>
+    <article className="panel px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <Link
             href={`/projects/${signal.project.slug}`}
-            className="font-display text-lg text-ink-100 hover:text-accent"
+            className="font-display text-base text-ink-100 hover:text-accent"
           >
             {signal.project.name}
           </Link>
-          <p className="mt-1 text-xs text-ink-500">
-            {when} UTC
-            {token?.contractAddress
-              ? ` · exact contract ${shortAddress(token.contractAddress)}`
-              : " · exact token contract unknown / not verified"}
-          </p>
+          {tokenLabel ? <span className="text-sm text-ink-300">{tokenLabel}</span> : null}
+          <span className="text-xs text-ink-500">{when}</span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <LabelChip title="Build evidence" value={build} explain={BUILD_EVIDENCE_EXPLAIN[build]} />
-          <LabelChip title="Identity" value={identity} explain={IDENTITY_EXPLAIN[identity]} />
-          <LabelChip title="Market context" value={market} explain={MARKET_CONTEXT_EXPLAIN[market]} />
-        </div>
-      </header>
-
-      <div className="mt-4 space-y-4">
-        <Section
-          title={`How this relates to ${tokenLabel}`}
-          body={signal.copy.tokenRelation}
-          emphasis
-        />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Section title="What happened" body={signal.copy.whatHappened} />
-          <Section title="Why it may matter" body={signal.copy.whyItMayMatter} />
-          <Section title="What we do not know" body={signal.copy.whatWeDoNotKnow} />
-          <Section title="What to watch next" body={signal.copy.whatToWatchNext} />
+        <div className="flex flex-wrap gap-1.5 text-[10px] uppercase tracking-wide text-ink-500">
+          <span className="border border-ink-700 px-1.5 py-0.5">{signal.labels.buildEvidence}</span>
+          <span className="border border-ink-700 px-1.5 py-0.5">{signal.labels.identity}</span>
+          <span className="border border-ink-700 px-1.5 py-0.5">{signal.labels.market}</span>
         </div>
       </div>
 
-      <footer className="mt-4 flex flex-wrap items-center gap-3 border-t border-ink-800 pt-3 text-xs">
-        <a
-          href={signal.event.sourceUrl ?? ""}
-          target="_blank"
-          rel="noreferrer"
-          className="text-accent hover:underline"
-        >
-          Read the public source ↗
-        </a>
-        {token?.sourceUrl ? (
+      <p className="mt-2 text-sm leading-snug text-ink-100">{signal.copy.whatHappened}</p>
+      <p className="mt-1 text-sm leading-snug text-ink-400">
+        {signal.copy.tokenRelation}
+        {signal.copy.whyItMayMatter ? ` ${signal.copy.whyItMayMatter}` : ""}
+      </p>
+      <p className="mt-1 text-xs text-ink-500">
+        {signal.copy.whatWeDoNotKnow} {signal.copy.whatToWatchNext}
+        {marketBits.length > 0 ? ` · ${marketBits.join(" · ")}` : ""}
+        {token?.contractAddress ? ` · ${shortAddress(token.contractAddress)}` : ""}
+      </p>
+
+      <div className="mt-2 flex flex-wrap gap-3 text-xs">
+        {signal.event.sourceUrl ? (
           <a
-            href={token.sourceUrl}
+            href={signal.event.sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-ink-400 hover:text-accent"
+            className="text-accent hover:underline"
           >
-            Token / contract source ↗
+            Source ↗
           </a>
-        ) : (
-          <span className="text-ink-600">Token source unknown / not verified</span>
-        )}
+        ) : null}
         {snapshot?.sourceUrl ? (
           <a
             href={snapshot.sourceUrl}
@@ -134,16 +76,13 @@ export function BuildSignalCard({ signal }: { signal: BuildSignal }) {
             rel="noreferrer"
             className="text-ink-400 hover:text-accent"
           >
-            Exact-contract market snapshot ·{" "}
-            {snapshot.timestamp.toISOString().slice(0, 16).replace("T", " ")} UTC ↗
+            Market ↗
           </a>
-        ) : (
-          <span className="text-ink-600">Market source unknown / not verified</span>
-        )}
-        <Link href={`/projects/${signal.project.slug}#why`} className="text-ink-400 hover:text-accent">
-          Full research note →
+        ) : null}
+        <Link href={`/projects/${signal.project.slug}`} className="text-ink-400 hover:text-accent">
+          Project →
         </Link>
-      </footer>
+      </div>
     </article>
   );
 }

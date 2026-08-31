@@ -70,15 +70,10 @@ export default async function HomePage({
         <div>
           <p className="font-mono text-[10px] uppercase tracking-widest text-ink-500">CODE × CAP</p>
           <h1 className="font-display text-2xl text-ink-100">Build Signals</h1>
-          <p className="mt-1 max-w-2xl text-sm text-ink-400">
-            Verified GitHub activity and token market context—explained in plain English.
-            <br />
-            We show public evidence, source links, and uncertainty. This is research, not a trade
-            call.
-            {projects.length > 0 ? (
-              <span className="ml-1 text-ink-500">· {projects.length} loaded</span>
-            ) : null}
-          </p>
+      <p className="mt-1 max-w-2xl text-sm text-ink-400">
+        Public GitHub activity + exact-contract market context. Research notes, not trade calls.
+        Use <span className="text-accent">Plain English →</span> in the table for full project notes.
+      </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <SeedResearchButton />
@@ -90,27 +85,6 @@ export default async function HomePage({
           </Link>
         </div>
       </div>
-
-      <section className="panel border-accent/20 p-4 text-sm leading-relaxed text-ink-300">
-        <h2 className="font-display text-lg text-ink-100">How to read this (no jargon)</h2>
-        <ol className="mt-2 list-decimal space-y-1.5 pl-5">
-          <li>
-            <span className="text-ink-100">Build Signals</span> below are short plain-English notes
-            about public GitHub / market evidence. Each one answers: what happened, why it may
-            matter, what we do not know, and what to watch next.
-          </li>
-          <li>
-            In the projects table, use{" "}
-            <span className="text-accent">Plain English →</span> for a readable research note.
-            Numbers (mcap, liquidity, identity score) are context only — not a trade call.
-          </li>
-          <li>
-            Every claim should have a source link, or say{" "}
-            <span className="text-ink-100">unknown / not verified</span>. Quiet GitHub can still mean
-            private work.
-          </li>
-        </ol>
-      </section>
 
       {dbError ? (
         <div className="panel border-danger/40 p-4 text-sm text-danger">
@@ -138,12 +112,8 @@ export default async function HomePage({
 
       <section className="space-y-3">
         <div>
-          <h2 className="font-display text-xl text-ink-100">Recent Build Signals</h2>
-          <p className="mt-1 max-w-3xl text-sm text-ink-400">
-            Each card names the tracked token, says whether the public code looks token-related or
-            only product-related, and shows exact-contract market context. Same project record does
-            not automatically mean the live token contract changed.
-          </p>
+          <h2 className="font-display text-xl text-ink-100">Recent updates</h2>
+          <p className="mt-1 text-sm text-ink-500">Latest public build notes tied to tracked tokens.</p>
         </div>
         {buildSignals.length > 0 ? (
           <div className="space-y-3">
@@ -153,11 +123,9 @@ export default async function HomePage({
           </div>
         ) : (
           <div className="panel p-4 text-sm leading-relaxed text-ink-400">
-            <p className="text-ink-200">No plain-English Build Signals ready yet for the last 30 days.</p>
-            <p className="mt-2">
-              Click <span className="text-accent">Run daily upkeep</span> to refresh public GitHub and
-              exact-contract market data. When sourced events arrive, they show up here with
-              explanations anyone can read.
+            <p className="text-ink-200">No recent public updates yet.</p>
+            <p className="mt-1 text-ink-500">
+              Run daily upkeep to refresh GitHub + markets.
             </p>
           </div>
         )}

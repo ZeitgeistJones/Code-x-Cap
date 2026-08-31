@@ -161,11 +161,6 @@ function formatDate(value: Date | string | null | undefined): string {
   return date.toISOString().slice(0, 10);
 }
 
-function shortAddress(value: string): string {
-  if (value.length <= 14) return value;
-  return `${value.slice(0, 6)}…${value.slice(-4)}`;
-}
-
 function formatUsd(value: number | null): string | null {
   if (value == null || !Number.isFinite(value)) return null;
   if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
@@ -174,99 +169,43 @@ function formatUsd(value: number | null): string | null {
   return `$${Math.round(value).toLocaleString()}`;
 }
 
-function firstSentence(value: string | null, max = 160): string | null {
-  if (!value?.trim()) return null;
-  const cleaned = value.replace(/\s+/g, " ").trim();
-  const cut = cleaned.match(/^.{1,160}?[.!?](?:\s|$)/)?.[0]?.trim() ?? cleaned.slice(0, max);
-  return cut.length < cleaned.length && cut === cleaned.slice(0, max) ? `${cut}…` : cut;
-}
-
 function tokenName(input: BuildSignalCopyInput): string {
   if (input.tokenSymbol?.trim()) return `$${input.tokenSymbol.trim()}`;
   return "this project’s token";
 }
 
-function tokenIdentityLine(input: BuildSignalCopyInput): string {
-  const name = tokenName(input);
-  if (!input.tokenContract?.trim()) {
-    return `${name} has no exact contract address on record yet (unknown / not verified).`;
-  }
-  const chain = input.tokenChain?.trim() || "unknown chain";
-  const verified = input.contractVerified ? "marked contract-verified" : "not marked contract-verified";
-  const source = input.tokenSourceUrl?.trim()
-    ? "with a public source link for the contract"
-    : "but the contract source link is missing (unknown / not verified)";
-  return (
-    `Tracked token: ${name} on ${chain}, exact contract ${shortAddress(input.tokenContract)} ` +
-    `(${verified}, ${source}). Identity confidence ${input.identityConfidence ?? 0}/10 ` +
-    `(${input.identityLabel}).`
-  );
-}
-
-function marketLine(input: BuildSignalCopyInput): string {
-  if (!input.tokenContract?.trim()) {
-    return "No exact-contract market snapshot is available because no contract address is attached.";
-  }
+function marketSnippet(input: BuildSignalCopyInput): string | null {
+  if (!input.tokenContract?.trim()) return null;
   if (input.marketLabel === "unavailable" || (!input.marketCap && !input.liquidityUsd)) {
-    return (
-      `We do not have a usable recent market snapshot for that exact ${tokenName(input)} contract ` +
-      `(unknown / not verified).`
-    );
+    return "No fresh market snapshot for this contract.";
   }
   const parts = [
-    formatUsd(input.marketCap) ? `market size about ${formatUsd(input.marketCap)}` : null,
-    formatUsd(input.liquidityUsd) ? `pool liquidity about ${formatUsd(input.liquidityUsd)}` : null,
+    formatUsd(input.marketCap) ? `${formatUsd(input.marketCap)} mcap` : null,
+    formatUsd(input.liquidityUsd) ? `${formatUsd(input.liquidityUsd)} liq` : null,
   ].filter(Boolean);
-  const when = formatDate(input.marketSnapshotAt);
-  const source = input.marketSource?.trim() || "public market feed";
-  const quality =
-    input.marketLabel === "thin"
-      ? "The pool looks thin, so these numbers are easy to misread."
-      : input.marketLabel === "stale"
-        ? "This snapshot is older than a day, so treat it as stale context only."
-        : "These figures are context only — not a price forecast.";
-  return (
-    `Latest exact-contract market context (${source}, ${when}): ${parts.join("; ") || "limited fields"}. ` +
-    quality
-  );
+  if (parts.length === 0) return null;
+  if (input.marketLabel === "stale") return `${parts.join(" · ")} (stale)`;
+  if (input.marketLabel === "thin") return `${parts.join(" · ")} (thin pool)`;
+  return parts.join(" · ");
 }
 
 function tokenRelationCopy(input: BuildSignalCopyInput): string {
   const name = tokenName(input);
   const classKey = classificationKey(input.classification);
   const evidenceKind = normalizeClassification(input.classification);
-  const identity = tokenIdentityLine(input);
-  const market = marketLine(input);
 
   if (input.eventType === "token_migration") {
-    return (
-      `${identity} This event is explicitly about a token migration. ` +
-      `That is a direct token-identity event — still verify the destination contract against the source link. ${market}`
-    );
+    return `Direct token migration signal for ${name}. Recheck the destination contract against the source.`;
   }
-
   if (input.eventType === "liquidity_threshold" || input.eventType === "market_cap_threshold") {
-    return (
-      `${identity} This signal comes from market data on the exact tracked contract, ` +
-      `not from GitHub. ${market}`
-    );
+    return `Market change on the exact ${name} contract — not a GitHub code update.`;
   }
-
   if (input.eventType === "repo_private" || input.eventType === "dormant") {
-    return (
-      `${identity} Public build visibility for the product behind ${name} just got weaker or quieter. ` +
-      `That does not by itself change the token contract, supply, or pool — it only reduces what outsiders can verify. ${market}`
-    );
+    return `Public code for ${name} got quieter/harder to see. That does not change the token by itself.`;
   }
-
   if (CONTRACT_LIKE.has(classKey)) {
-    return (
-      `${identity} The public change looks like ${evidenceKind}, which is the closest public clue ` +
-      `that build activity might touch on-chain or token mechanics. ` +
-      `We have not verified that this specific commit redeployed or upgraded the live ${name} contract. ${market}`
-    );
+    return `Looks like ${evidenceKind}. Closest public clue this might touch ${name} on-chain — not verified as a live contract upgrade.`;
   }
-
   if (
     classKey.includes("feature") ||
     classKey.includes("sdk") ||
@@ -275,17 +214,9 @@ function tokenRelationCopy(input: BuildSignalCopyInput): string {
     input.eventType === "release" ||
     input.eventType === "product_launch"
   ) {
-    return (
-      `${identity} This looks like product/shipping work (${evidenceKind}), not an obvious token-contract edit. ` +
-      `It may matter for the product people associate with ${name}, but public code activity alone does not prove ` +
-      `${name} is required, used, or economically linked to this change. ${market}`
-    );
+    return `Product/shipping work behind ${name}, not an obvious token-contract edit.`;
   }
-
-  return (
-    `${identity} From public evidence alone, the link between this GitHub activity and ${name} is unproven. ` +
-    `Same project record ≠ same contract, same users, or same economics. ${market}`
-  );
+  return `Link between this update and ${name} is unknown / not verified.`;
 }
 
 export function classifyBuildEvidence(input: BuildEvidenceInput): BuildEvidenceLabel {
@@ -343,64 +274,46 @@ export function classifyMarketContext(input: MarketContextInput): MarketContextL
 export function buildSignalCopy(input: BuildSignalCopyInput): BuildSignalCopy {
   const date = formatDate(input.happenedAt);
   const evidenceKind = normalizeClassification(input.classification);
-  const score = input.meaningfulScore;
   const name = tokenName(input);
-  const eventPlain = EVENT_PLAIN[input.eventType] ?? "public event";
-  const projectBlurb =
-    firstSentence(input.shortDescription) || firstSentence(input.trackingReason);
-  const detail =
-    firstSentence(input.eventDescription) ||
-    firstSentence(input.eventTitle) ||
-    null;
-  const commitBit =
-    input.commitCount && input.commitCount > 1
-      ? `${input.commitCount} meaningful public commits grouped for the day`
-      : "a meaningful public commit";
+  const market = marketSnippet(input);
+  const classKey = classificationKey(input.classification);
 
   let whatHappened: string;
   if (input.eventType === "meaningful_commit") {
-    whatHappened =
-      `On ${date}, ${input.projectName} showed ${commitBit} classified as ${evidenceKind}` +
-      (score != null ? ` (first-pass score ${score}/10)` : "") +
-      `.` +
-      (detail ? ` Public note: ${detail}` : "") +
-      (projectBlurb ? ` Project context: ${projectBlurb}` : "");
+    const count =
+      input.commitCount && input.commitCount > 1 ? `${input.commitCount} public commits` : "Public commit";
+    whatHappened = `${count} on ${date}: ${evidenceKind}${
+      input.meaningfulScore != null ? ` (${input.meaningfulScore}/10)` : ""
+    }.`;
+  } else if (input.eventType === "repo_private") {
+    whatHappened = `Public GitHub repo went private/missing on ${date}.`;
+  } else if (input.eventType === "dormant") {
+    whatHappened = `Long quiet stretch in public builds noted on ${date}.`;
   } else {
-    whatHappened =
-      `On ${date}, ${input.projectName} had a public ${eventPlain}.` +
-      (detail ? ` Public note: ${detail}` : "") +
-      (projectBlurb ? ` Project context: ${projectBlurb}` : "");
+    whatHappened = `${EVENT_PLAIN[input.eventType] ?? "Public update"} on ${date}.`;
   }
 
   const whyItMayMatter =
-    input.eventType === "meaningful_commit" ||
-    input.eventType === "release" ||
-    input.eventType === "product_launch"
-      ? `For someone following ${name}, this is evidence the team may still be shipping the product ` +
-        `tied to that token ticker — useful for build visibility, not for guessing price. ` +
-        `Stronger when identity is solid; weaker when the contract link is unverified.`
+    input.eventType === "repo_private" || input.eventType === "dormant"
+      ? `Harder to verify what the team behind ${name} is shipping.`
       : input.eventType === "liquidity_threshold" || input.eventType === "market_cap_threshold"
-        ? `This is market-structure context for the exact ${name} contract, shown beside build evidence ` +
-          `so you can see operating conditions — not a recommendation.`
-        : `This public signal changes how confidently outsiders can follow the project behind ${name}.`;
+        ? `Pool/market conditions around ${name} changed.`
+        : `Team behind ${name} still showing public shipping activity.`;
 
-  const whatWeDoNotKnow =
-    `We do not know whether this change is live, finished, secure, adopted, or economically material to ${name}. ` +
-    `We also do not know private roadmap work. ` +
-    (input.tokenContract
-      ? `Unless a source proves it, assume the GitHub change did not automatically alter the live ${name} contract.`
-      : `Without an exact contract on file, any token link stays unknown / not verified.`);
+  const whatWeDoNotKnow = CONTRACT_LIKE.has(classKey)
+    ? `Not verified that the live ${name} contract changed.`
+    : `Doesn’t prove ${name} usage, revenue, or a contract change.`;
 
-  const whatToWatchNext = CONTRACT_LIKE.has(classificationKey(input.classification))
-    ? `Watch for a verified contract source update, explorer verification, migration notice, ` +
-      `or another commit that names the live ${name} address. Also watch whether exact-contract liquidity stays readable.`
-    : `Watch for a release/product note that mentions ${name} or the exact contract, ` +
-      `plus follow-up commits that show this work reached a usable surface. Keep checking the exact-contract market snapshot for freshness only.`;
+  const whatToWatchNext = CONTRACT_LIKE.has(classKey)
+    ? `Next: contract source update or commit naming the live ${name} address.`
+    : `Next: release/product note, or another clear public commit.`;
+
+  const tokenRelation = [tokenRelationCopy(input), market].filter(Boolean).join(" ");
 
   return {
     whatHappened,
     whyItMayMatter,
-    tokenRelation: tokenRelationCopy(input),
+    tokenRelation,
     whatWeDoNotKnow,
     whatToWatchNext,
   };
@@ -453,7 +366,7 @@ export function explanationFingerprint(input: BuildSignalCopyInput): string {
   for (let i = 0; i < payload.length; i += 1) {
     hash = (hash * 31 + payload.charCodeAt(i)) >>> 0;
   }
-  return `v1-${hash.toString(16)}`;
+  return `v2-${hash.toString(16)}`;
 }
 
 export function readCachedAiExplanation(
