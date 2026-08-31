@@ -28,6 +28,7 @@ import { RefreshGithubButton } from "@/components/RefreshGithubButton";
 import { RefreshMarketsButton } from "@/components/RefreshMarketsButton";
 import { RecencyPill, StatusPill } from "@/components/Badges";
 import { getProjectBySlug } from "@/lib/queries";
+import { collapseMeaningfulCommitsByDay } from "@/lib/buildSignals";
 
 export const dynamic = "force-dynamic";
 
@@ -53,18 +54,12 @@ export default async function ProjectDetailPage({
 
   const signalMap = Object.fromEntries(project.signals.map((s) => [s.signalType, s]));
   const scoreMap = Object.fromEntries(project.scores.map((s) => [s.dimension, s]));
-  const groupedEventDays = new Set(
-    project.events
-      .filter((event) => event.metadata?.groupedBuildUpdate === true)
-      .map((event) => new Date(event.timestamp).toISOString().slice(0, 10)),
-  );
+  const collapsedCommits = collapseMeaningfulCommitsByDay(project.events);
+  const featuredCommitIds = new Set(collapsedCommits.map((row) => row.event.id));
   const eligibleEvents = project.events.filter((event) => {
     if (!BUILD_SIGNAL_EVENT_TYPES.has(event.eventType) || !event.sourceUrl) return false;
     if (event.eventType !== "meaningful_commit") return true;
-    const score = event.metadata?.score;
-    if (typeof score !== "number" || score < 5) return false;
-    const day = new Date(event.timestamp).toISOString().slice(0, 10);
-    return event.metadata?.groupedBuildUpdate === true || !groupedEventDays.has(day);
+    return featuredCommitIds.has(event.id);
   });
   const eligibleIds = new Set(eligibleEvents.map((event) => event.id));
   const otherEvents = project.events.filter((event) => !eligibleIds.has(event.id));

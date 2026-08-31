@@ -113,7 +113,10 @@ export default async function HomePage({
       <section className="space-y-3">
         <div>
           <h2 className="font-display text-xl text-ink-100">Recent updates</h2>
-          <p className="mt-1 text-sm text-ink-500">Latest public build notes tied to tracked tokens.</p>
+          <p className="mt-1 text-sm text-ink-500">
+            Latest public build notes tied to tracked tokens. One card per project per day. Public
+            commits are not usage, revenue, or a live contract change.
+          </p>
         </div>
         {buildSignals.length > 0 ? (
           <div className="space-y-3">

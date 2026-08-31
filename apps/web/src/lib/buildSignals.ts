@@ -41,12 +41,14 @@ export interface MarketContextInput {
 
 export interface BuildSignalCopyInput {
   projectName: string;
+  projectStatus?: string | null;
   eventType: BuildSignalEventType;
   eventTitle: string | null;
   eventDescription: string | null;
   classification: string | null;
   meaningfulScore: number | null;
   commitCount: number | null;
+  commitHeadlines?: string[] | null;
   happenedAt: Date | string;
   shortDescription: string | null;
   trackingReason: string | null;
@@ -80,6 +82,24 @@ export type CachedAiExplanation = {
   source: "gemini";
   copy: BuildSignalCopy;
 };
+
+/** Lightweight event shape used to collapse same-day commit spam. */
+export interface CollapsibleBuildEvent {
+  id: string;
+  projectId: string;
+  eventType: string;
+  timestamp: Date;
+  title: string | null;
+  description: string | null;
+  sourceUrl: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface CollapsedCommitDay<T extends CollapsibleBuildEvent> {
+  event: T;
+  commitCount: number;
+  commitHeadlines: string[];
+}
 
 /** Short plain-English meanings for the three labels shown on every card. */
 export const BUILD_EVIDENCE_EXPLAIN: Record<BuildEvidenceLabel, string> = {
@@ -144,6 +164,8 @@ const EVENT_PLAIN: Record<BuildSignalEventType, string> = {
   dormant: "long quiet stretch in public build activity",
 };
 
+const GENERIC_TITLES = /^(build update|meaningful commit\b)/i;
+
 function classificationKey(value: string | null): string {
   if (!value) return "build_work";
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -161,12 +183,10 @@ function formatDate(value: Date | string | null | undefined): string {
   return date.toISOString().slice(0, 10);
 }
 
-function formatUsd(value: number | null): string | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${Math.round(value).toLocaleString()}`;
+function clip(value: string, max: number): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).replace(/\s+\S*$/, "")}…`;
 }
 
 function tokenName(input: BuildSignalCopyInput): string {
@@ -174,25 +194,106 @@ function tokenName(input: BuildSignalCopyInput): string {
   return "this project’s token";
 }
 
-function marketSnippet(input: BuildSignalCopyInput): string | null {
-  if (!input.tokenContract?.trim()) return null;
-  if (input.marketLabel === "unavailable" || (!input.marketCap && !input.liquidityUsd)) {
-    return "No fresh market snapshot for this contract.";
+export function commitMessageFromDescription(description: string | null | undefined): string | null {
+  if (!description?.trim()) return null;
+  const firstLine = description.split("\n")[0]?.trim() ?? "";
+  if (!firstLine) return null;
+  if (/meaningful public commits? recorded/i.test(firstLine)) return null;
+  const stripped = firstLine.split(/\s*·\s*score\s+\d+(?:\.\d+)?\/10\b/i)[0]?.trim() ?? "";
+  if (stripped.length < 4) return null;
+  return clip(stripped, 110);
+}
+
+export function uniqueCommitHeadlines(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const headlines: string[] = [];
+  for (const value of values) {
+    const text = value?.replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    headlines.push(clip(text, 110));
+    if (headlines.length >= 3) break;
   }
-  const parts = [
-    formatUsd(input.marketCap) ? `${formatUsd(input.marketCap)} mcap` : null,
-    formatUsd(input.liquidityUsd) ? `${formatUsd(input.liquidityUsd)} liq` : null,
-  ].filter(Boolean);
-  if (parts.length === 0) return null;
-  if (input.marketLabel === "stale") return `${parts.join(" · ")} (stale)`;
-  if (input.marketLabel === "thin") return `${parts.join(" · ")} (thin pool)`;
-  return parts.join(" · ");
+  return headlines;
+}
+
+function headlinesFromMetadata(metadata: Record<string, unknown> | null | undefined): string[] {
+  const raw = metadata?.commitHeadlines;
+  if (!Array.isArray(raw)) return [];
+  return uniqueCommitHeadlines(raw.map((item) => (typeof item === "string" ? item : null)));
+}
+
+function eventScore(metadata: Record<string, unknown> | null, description: string | null): number | null {
+  const value = metadata?.score;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const match = description?.match(/score\s+(\d+(?:\.\d+)?)\/10/i);
+  return match ? Number(match[1]) : null;
+}
+
+function isGrouped(event: CollapsibleBuildEvent): boolean {
+  return event.metadata?.groupedBuildUpdate === true;
+}
+
+function groupedCommitCount(event: CollapsibleBuildEvent): number {
+  const value = event.metadata?.commitCount;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+/**
+ * One meaningful-commit card per project per UTC day.
+ * Prefers a grouped Build update; otherwise keeps the highest-score raw commit
+ * and still reports the day's commit count + headlines from sibling events.
+ */
+export function collapseMeaningfulCommitsByDay<T extends CollapsibleBuildEvent>(
+  events: T[],
+): Array<CollapsedCommitDay<T>> {
+  const byDay = new Map<string, T[]>();
+  for (const event of events) {
+    if (event.eventType !== "meaningful_commit" || !event.sourceUrl) continue;
+    const score = eventScore(event.metadata, event.description);
+    if (score == null || score < 5) continue;
+    const key = `${event.projectId}:${formatDate(event.timestamp)}`;
+    const rows = byDay.get(key) ?? [];
+    rows.push(event);
+    byDay.set(key, rows);
+  }
+
+  const collapsed: Array<CollapsedCommitDay<T>> = [];
+  for (const rows of byDay.values()) {
+    const grouped = rows
+      .filter((event) => isGrouped(event))
+      .sort((a, b) => groupedCommitCount(b) - groupedCommitCount(a));
+    const raw = rows
+      .filter((event) => !isGrouped(event))
+      .sort((a, b) => {
+        const scoreDelta =
+          (eventScore(b.metadata, b.description) ?? 0) - (eventScore(a.metadata, a.description) ?? 0);
+        if (scoreDelta !== 0) return scoreDelta;
+        return b.timestamp.getTime() - a.timestamp.getTime();
+      });
+    const pick = grouped[0] ?? raw[0];
+    if (!pick) continue;
+    const commitCount = grouped[0] ? groupedCommitCount(grouped[0]) : raw.length;
+    const commitHeadlines = uniqueCommitHeadlines([
+      ...headlinesFromMetadata(pick.metadata),
+      ...raw.map((event) => commitMessageFromDescription(event.description)),
+    ]);
+    collapsed.push({ event: pick, commitCount, commitHeadlines });
+  }
+
+  return collapsed.sort((a, b) => b.event.timestamp.getTime() - a.event.timestamp.getTime());
 }
 
 function tokenRelationCopy(input: BuildSignalCopyInput): string {
   const name = tokenName(input);
   const classKey = classificationKey(input.classification);
   const evidenceKind = normalizeClassification(input.classification);
+  const migrationNote =
+    input.projectStatus === "migration"
+      ? ` Tracked ${name} contract is flagged as a migration — confirm it is still the live token.`
+      : "";
 
   if (input.eventType === "token_migration") {
     return `Direct token migration signal for ${name}. Recheck the destination contract against the source.`;
@@ -204,7 +305,7 @@ function tokenRelationCopy(input: BuildSignalCopyInput): string {
     return `Public code for ${name} got quieter/harder to see. That does not change the token by itself.`;
   }
   if (CONTRACT_LIKE.has(classKey)) {
-    return `Looks like ${evidenceKind}. Closest public clue this might touch ${name} on-chain — not verified as a live contract upgrade.`;
+    return `Looks like ${evidenceKind}. Closest public clue this might touch ${name} on-chain — not verified as a live contract upgrade.${migrationNote}`;
   }
   if (
     classKey.includes("feature") ||
@@ -214,9 +315,9 @@ function tokenRelationCopy(input: BuildSignalCopyInput): string {
     input.eventType === "release" ||
     input.eventType === "product_launch"
   ) {
-    return `Product/shipping work behind ${name}, not an obvious token-contract edit.`;
+    return `Product/shipping work behind ${name}, not an obvious token-contract edit.${migrationNote}`;
   }
-  return `Link between this update and ${name} is unknown / not verified.`;
+  return `Link between this update and ${name} is unknown / not verified.${migrationNote}`;
 }
 
 export function classifyBuildEvidence(input: BuildEvidenceInput): BuildEvidenceLabel {
@@ -275,45 +376,73 @@ export function buildSignalCopy(input: BuildSignalCopyInput): BuildSignalCopy {
   const date = formatDate(input.happenedAt);
   const evidenceKind = normalizeClassification(input.classification);
   const name = tokenName(input);
-  const market = marketSnippet(input);
   const classKey = classificationKey(input.classification);
+  const headlines = uniqueCommitHeadlines([
+    ...(input.commitHeadlines ?? []),
+    GENERIC_TITLES.test(input.eventTitle ?? "") ? null : input.eventTitle,
+    commitMessageFromDescription(input.eventDescription),
+  ]);
+  const headlineText = headlines.join("; ");
+  const count = input.commitCount && input.commitCount > 1 ? input.commitCount : null;
 
   let whatHappened: string;
   if (input.eventType === "meaningful_commit") {
-    const count =
-      input.commitCount && input.commitCount > 1 ? `${input.commitCount} public commits` : "Public commit";
-    whatHappened = `${count} on ${date}: ${evidenceKind}${
-      input.meaningfulScore != null ? ` (${input.meaningfulScore}/10)` : ""
-    }.`;
+    if (count && headlineText) {
+      whatHappened = `${count} public commits on ${date}: ${headlineText}.`;
+    } else if (count) {
+      whatHappened = `${count} public commits on ${date}: ${evidenceKind}${
+        input.meaningfulScore != null ? ` (best ${input.meaningfulScore}/10)` : ""
+      }.`;
+    } else if (headlineText) {
+      whatHappened = `Public commit on ${date}: ${headlineText}.`;
+    } else {
+      whatHappened = `Public commit on ${date}: ${evidenceKind}${
+        input.meaningfulScore != null ? ` (${input.meaningfulScore}/10)` : ""
+      }.`;
+    }
   } else if (input.eventType === "repo_private") {
     whatHappened = `Public GitHub repo went private/missing on ${date}.`;
   } else if (input.eventType === "dormant") {
     whatHappened = `Long quiet stretch in public builds noted on ${date}.`;
   } else {
-    whatHappened = `${EVENT_PLAIN[input.eventType] ?? "Public update"} on ${date}.`;
+    whatHappened = headlineText
+      ? `${EVENT_PLAIN[input.eventType]} on ${date}: ${headlineText}.`
+      : `${EVENT_PLAIN[input.eventType] ?? "Public update"} on ${date}.`;
   }
 
-  const whyItMayMatter =
-    input.eventType === "repo_private" || input.eventType === "dormant"
-      ? `Harder to verify what the team behind ${name} is shipping.`
-      : input.eventType === "liquidity_threshold" || input.eventType === "market_cap_threshold"
-        ? `Pool/market conditions around ${name} changed.`
-        : `Team behind ${name} still showing public shipping activity.`;
+  let whyItMayMatter: string;
+  if (input.eventType === "repo_private" || input.eventType === "dormant") {
+    whyItMayMatter = `Harder to verify what the team behind ${name} is shipping.`;
+  } else if (input.eventType === "liquidity_threshold" || input.eventType === "market_cap_threshold") {
+    whyItMayMatter = `Pool/market conditions around ${name} changed.`;
+  } else if (input.shortDescription?.trim()) {
+    whyItMayMatter = `Fits the product behind ${name}: ${clip(input.shortDescription, 110)}.`;
+  } else if (input.trackingReason?.trim()) {
+    whyItMayMatter = clip(input.trackingReason, 140);
+  } else {
+    whyItMayMatter = `Public code moved on the project behind ${name}.`;
+  }
 
   const whatWeDoNotKnow = CONTRACT_LIKE.has(classKey)
     ? `Not verified that the live ${name} contract changed.`
-    : `Doesn’t prove ${name} usage, revenue, or a contract change.`;
+    : input.identityLabel === "unverified"
+      ? `Project/token identity for ${name} is still unverified.`
+      : input.eventType === "repo_private"
+        ? `Private/missing repo does not prove ${name} stopped, shipped, or changed on-chain.`
+        : input.projectStatus === "migration"
+          ? `Tracked ${name} contract is flagged as a migration — it may not be the live token.`
+          : `This is public code evidence, not a ${name} usage or revenue print.`;
 
   const whatToWatchNext = CONTRACT_LIKE.has(classKey)
     ? `Next: contract source update or commit naming the live ${name} address.`
-    : `Next: release/product note, or another clear public commit.`;
-
-  const tokenRelation = [tokenRelationCopy(input), market].filter(Boolean).join(" ");
+    : input.projectStatus === "migration"
+      ? `Next: new contract announcement, or a source that maps old ${name} to the live one.`
+      : `Next: a release note that names what shipped, or another clear public commit.`;
 
   return {
     whatHappened,
     whyItMayMatter,
-    tokenRelation,
+    tokenRelation: tokenRelationCopy(input),
     whatWeDoNotKnow,
     whatToWatchNext,
   };
@@ -339,12 +468,14 @@ export function isBuildSignalCopy(value: unknown): value is BuildSignalCopy {
 export function explanationFingerprint(input: BuildSignalCopyInput): string {
   const payload = [
     input.projectName,
+    input.projectStatus ?? "",
     input.eventType,
     input.eventTitle ?? "",
     input.eventDescription ?? "",
     input.classification ?? "",
     String(input.meaningfulScore ?? ""),
     String(input.commitCount ?? ""),
+    (input.commitHeadlines ?? []).join(";"),
     formatDate(input.happenedAt),
     input.shortDescription ?? "",
     input.trackingReason ?? "",
@@ -366,7 +497,7 @@ export function explanationFingerprint(input: BuildSignalCopyInput): string {
   for (let i = 0; i < payload.length; i += 1) {
     hash = (hash * 31 + payload.charCodeAt(i)) >>> 0;
   }
-  return `v2-${hash.toString(16)}`;
+  return `v3-${hash.toString(16)}`;
 }
 
 export function readCachedAiExplanation(
@@ -387,4 +518,12 @@ export function readCachedAiExplanation(
     source: "gemini",
     copy: row.copy,
   };
+}
+
+/** True when the two caveat fields are the stock template, not a specific unknown. */
+export function isGenericCaveat(copy: BuildSignalCopy): boolean {
+  return (
+    /usage or revenue print|usage, revenue, or a contract change/i.test(copy.whatWeDoNotKnow) &&
+    /release note|release\/product note/i.test(copy.whatToWatchNext)
+  );
 }

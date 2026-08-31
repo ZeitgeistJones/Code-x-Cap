@@ -11,8 +11,10 @@ import {
   buildSignalCopy,
   classifyIdentity,
   classifyMarketContext,
+  commitMessageFromDescription,
   explanationFingerprint,
   readCachedAiExplanation,
+  uniqueCommitHeadlines,
 } from "@/lib/buildSignals";
 import { db } from "@/lib/db";
 import { explainBuildSignalWithGemini, isGeminiConfigured } from "@/lib/geminiExplain";
@@ -64,14 +66,24 @@ function copyInputFromRows(args: {
   const marketCap = snapshot?.marketCap != null ? Number(snapshot.marketCap) : null;
   const liquidityUsd = snapshot?.liquidityUsd != null ? Number(snapshot.liquidityUsd) : null;
 
+  const commitHeadlinesRaw = event.metadata?.commitHeadlines;
+  const commitHeadlines = uniqueCommitHeadlines([
+    ...(Array.isArray(commitHeadlinesRaw)
+      ? commitHeadlinesRaw.map((item) => (typeof item === "string" ? item : null))
+      : []),
+    commitMessageFromDescription(event.description),
+  ]);
+
   return {
     projectName: project.name,
+    projectStatus: project.projectStatus,
     eventType: event.eventType as BuildSignalEventType,
     eventTitle: event.title,
     eventDescription: event.description,
     classification: typeof classification === "string" ? classification : null,
     meaningfulScore: typeof score === "number" ? score : null,
     commitCount: typeof commitCount === "number" ? commitCount : null,
+    commitHeadlines,
     happenedAt: event.timestamp,
     shortDescription: project.shortDescription,
     trackingReason: project.trackingReason,

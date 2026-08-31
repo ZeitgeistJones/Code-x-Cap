@@ -31,6 +31,7 @@ import {
   classifyBuildEvidence,
   classifyIdentity,
   classifyMarketContext,
+  collapseMeaningfulCommitsByDay,
   explanationFingerprint,
   readCachedAiExplanation,
   type BuildEvidenceLabel,
@@ -475,21 +476,17 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
 
   const snapshotMap = await latestSnapshotsByTokenIds(tokenRows.map((token) => token.id));
   const projectMap = new Map(projectRows.map((project) => [project.id, project]));
-  const groupedDays = new Set(
-    eventRows
-      .filter((event) => event.metadata?.groupedBuildUpdate === true)
-      .map((event) => `${event.projectId}:${event.timestamp.toISOString().slice(0, 10)}`),
+  const sourcedEvents = eventRows.filter(
+    (event) => projectMap.has(event.projectId) && Boolean(event.sourceUrl),
   );
+  const collapsedCommits = collapseMeaningfulCommitsByDay(sourcedEvents);
+  const commitById = new Map(collapsedCommits.map((row) => [row.event.id, row]));
+  const featuredEvents = [
+    ...sourcedEvents.filter((event) => event.eventType !== "meaningful_commit"),
+    ...collapsedCommits.map((row) => row.event),
+  ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-  const mapped = eventRows
-    .filter((event) => {
-      if (!projectMap.has(event.projectId) || !event.sourceUrl) return false;
-      if (event.eventType !== "meaningful_commit") return true;
-      const score = eventScore(event.metadata, event.description);
-      if (score == null || score < 5) return false;
-      const dayKey = `${event.projectId}:${event.timestamp.toISOString().slice(0, 10)}`;
-      return event.metadata?.groupedBuildUpdate === true || !groupedDays.has(dayKey);
-    })
+  const mapped = featuredEvents
     .map((event) => {
       const project = projectMap.get(event.projectId)!;
       const currentToken = tokenRows.find((token) => token.projectId === project.id) ?? null;
@@ -521,22 +518,26 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
         liquidityUsd: snapshot?.liquidityUsd ? Number(snapshot.liquidityUsd) : null,
       });
 
+      const collapsed = commitById.get(event.id);
       const commitCountRaw = event.metadata?.commitCount;
       const commitCount =
-        typeof commitCountRaw === "number" && Number.isFinite(commitCountRaw)
+        collapsed?.commitCount ??
+        (typeof commitCountRaw === "number" && Number.isFinite(commitCountRaw)
           ? commitCountRaw
-          : null;
+          : null);
       const marketCap = snapshot?.marketCap != null ? Number(snapshot.marketCap) : null;
       const liquidityUsd = snapshot?.liquidityUsd != null ? Number(snapshot.liquidityUsd) : null;
 
       const copyInput = {
         projectName: project.name,
+        projectStatus: project.projectStatus,
         eventType,
         eventTitle: event.title,
         eventDescription: event.description,
         classification,
         meaningfulScore: score,
         commitCount,
+        commitHeadlines: collapsed?.commitHeadlines ?? null,
         happenedAt: event.timestamp,
         shortDescription: project.shortDescription,
         trackingReason: project.trackingReason,

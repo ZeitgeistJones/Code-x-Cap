@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isGenericCaveat } from "@/lib/buildSignals";
 import type { getRecentBuildSignals } from "@/lib/queries";
 
 type BuildSignal = Awaited<ReturnType<typeof getRecentBuildSignals>>[number];
@@ -52,11 +53,18 @@ export function BuildSignalCard({ signal }: { signal: BuildSignal }) {
         {signal.copy.tokenRelation}
         {signal.copy.whyItMayMatter ? ` ${signal.copy.whyItMayMatter}` : ""}
       </p>
-      <p className="mt-1 text-xs text-ink-500">
-        {signal.copy.whatWeDoNotKnow} {signal.copy.whatToWatchNext}
-        {marketBits.length > 0 ? ` · ${marketBits.join(" · ")}` : ""}
-        {token?.contractAddress ? ` · ${shortAddress(token.contractAddress)}` : ""}
-      </p>
+      {isGenericCaveat(signal.copy) ? null : (
+        <p className="mt-1 text-xs text-ink-500">
+          {signal.copy.whatWeDoNotKnow} {signal.copy.whatToWatchNext}
+        </p>
+      )}
+      {marketBits.length > 0 || token?.contractAddress ? (
+        <p className="mt-1 text-xs text-ink-500">
+          {[...marketBits, token?.contractAddress ? shortAddress(token.contractAddress) : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap gap-3 text-xs">
         {signal.event.sourceUrl ? (

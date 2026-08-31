@@ -6,10 +6,10 @@
  * one event per request when GEMINI_API_KEY is set.
  */
 
-import { createHash } from "node:crypto";
 import { events, githubRepositories, jobRuns, projects, tokens } from "@codexcap/db/schema";
 import { and, asc, desc, eq, gte, inArray, isNotNull, notInArray } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { commitMessageFromDescription, uniqueCommitHeadlines } from "@/lib/buildSignals";
 import { explainBuildSignalEvent } from "@/lib/explainBuildSignal";
 import { isGeminiConfigured } from "@/lib/geminiExplain";
 import { refreshGithubRepository } from "@/lib/github";
@@ -303,33 +303,33 @@ async function groupBuildUpdates(
   run: JobRun,
   state: DailyUpkeepState,
 ): Promise<number> {
-  const dayStart = new Date(run.startedAt);
-  dayStart.setUTCHours(0, 0, 0, 0);
+  const since = new Date(run.startedAt);
+  since.setUTCDate(since.getUTCDate() - 14);
   const commitEvents = await database
     .select()
     .from(events)
-    .where(and(eq(events.eventType, "meaningful_commit"), gte(events.createdAt, run.startedAt)))
+    .where(and(eq(events.eventType, "meaningful_commit"), gte(events.timestamp, since)))
     .orderBy(asc(events.timestamp));
   const rawCommitEvents = commitEvents.filter(
     (event) => event.metadata?.groupedBuildUpdate !== true && Boolean(event.sourceUrl),
   );
-  const byProject = new Map<string, typeof rawCommitEvents>();
+  const byProjectDay = new Map<string, typeof rawCommitEvents>();
 
   for (const event of rawCommitEvents) {
-    const rows = byProject.get(event.projectId) ?? [];
+    const day = event.timestamp.toISOString().slice(0, 10);
+    const key = `${event.projectId}:${day}`;
+    const rows = byProjectDay.get(key) ?? [];
     rows.push(event);
-    byProject.set(event.projectId, rows);
+    byProjectDay.set(key, rows);
   }
 
-  let created = 0;
-  for (const [projectId, projectEvents] of byProject) {
+  let written = 0;
+  for (const [key, projectEvents] of byProjectDay) {
     const newest = projectEvents[projectEvents.length - 1];
     if (!newest?.sourceUrl) continue;
+    const [projectId, day] = key.split(":");
+    if (!projectId || !day) continue;
 
-    const shas = projectEvents
-      .map((event) => stringFromMetadata(event.metadata, "sha"))
-      .filter((sha): sha is string => Boolean(sha))
-      .sort();
     const scores = projectEvents
       .map((event) => numberFromMetadata(event.metadata, "score"))
       .filter((score): score is number => score != null);
@@ -340,46 +340,80 @@ async function groupBuildUpdates(
           .filter((value): value is string => Boolean(value)),
       ),
     ];
-    const digestInput =
-      shas.length > 0 ? shas.join(":") : projectEvents.map((event) => event.id).sort().join(":");
-    const digest = createHash("sha256").update(digestInput).digest("hex").slice(0, 16);
+    const shas = projectEvents
+      .map((event) => stringFromMetadata(event.metadata, "sha"))
+      .filter((sha): sha is string => Boolean(sha));
+    const commitHeadlines = uniqueCommitHeadlines(
+      projectEvents.map((event) => commitMessageFromDescription(event.description)),
+    );
     const maxScore = scores.length > 0 ? Math.max(...scores) : null;
-    const summary = classifications.length
-      ? classifications.map((value) => value.replace(/_/g, " ")).join(", ")
-      : "public build work";
+    const summary = commitHeadlines.length
+      ? commitHeadlines.join("; ")
+      : classifications.length
+        ? classifications.map((value) => value.replace(/_/g, " ")).join(", ")
+        : "public build work";
+    const title =
+      projectEvents.length > 1 ? `Build update · ${projectEvents.length} commits` : "Build update";
+    const description = `${projectEvents.length} meaningful public commit${
+      projectEvents.length === 1 ? "" : "s"
+    } on ${day} · ${summary}`;
+    const dedupeKey = `build-update-${projectId}-${day}`;
+    const metadata = {
+      groupedBuildUpdate: true,
+      commitCount: projectEvents.length,
+      commitHeadlines,
+      shas,
+      scores,
+      score: maxScore,
+      classifications,
+      classification: classifications[0] ?? "build_work",
+      jobRunId: run.id,
+    };
+
+    const [existing] = await database
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.projectId, projectId), eq(events.dedupeKey, dedupeKey)))
+      .limit(1);
+
+    if (existing) {
+      await database
+        .update(events)
+        .set({
+          timestamp: newest.timestamp,
+          title,
+          description,
+          sourceUrl: newest.sourceUrl,
+          metadata,
+          updatedAt: new Date(),
+        })
+        .where(eq(events.id, existing.id));
+      written += 1;
+      continue;
+    }
+
     const inserted = await database
       .insert(events)
       .values({
         projectId,
         eventType: "meaningful_commit",
         timestamp: newest.timestamp,
-        title: "Build update",
-        description: `${projectEvents.length} meaningful public commit${
-          projectEvents.length === 1 ? "" : "s"
-        } recorded today · ${summary}`,
+        title,
+        description,
         sourceUrl: newest.sourceUrl,
         severity: "info",
         autoGenerated: true,
         confirmed: true,
-        dedupeKey: `build-update-${projectId}-${dayStart.toISOString().slice(0, 10)}-${digest}`,
-        metadata: {
-          groupedBuildUpdate: true,
-          commitCount: projectEvents.length,
-          shas,
-          scores,
-          score: maxScore,
-          classifications,
-          classification: classifications[0] ?? "build_work",
-          jobRunId: run.id,
-        },
+        dedupeKey,
+        metadata,
       })
       .onConflictDoNothing()
       .returning({ id: events.id });
-    created += inserted.length;
+    written += inserted.length;
   }
 
-  state.groupedBuildUpdatesCreated = created;
-  return created;
+  state.groupedBuildUpdatesCreated = written;
+  return written;
 }
 
 async function collectExplainCandidates(database: Database): Promise<string[]> {
@@ -422,7 +456,9 @@ async function collectExplainCandidates(database: Database): Promise<string[]> {
     }
     const ai = row.metadata?.aiExplanation;
     if (!ai || typeof ai !== "object") return true;
-    return (ai as Record<string, unknown>).source !== "gemini";
+    const cached = ai as Record<string, unknown>;
+    if (cached.source !== "gemini") return true;
+    return typeof cached.fingerprint !== "string" || !cached.fingerprint.startsWith("v3-");
   });
 
   return needsExplain.slice(0, MAX_EXPLAIN_PER_JOB).map((row) => row.id);
