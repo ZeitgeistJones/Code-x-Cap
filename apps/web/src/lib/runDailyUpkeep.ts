@@ -2,12 +2,16 @@
  * Resumable daily upkeep orchestration.
  * Each request refreshes at most one repository and one token, then stores its
  * cursor in job_runs.metadata so Vercel's function limit cannot kill the run.
+ * After grouping Build updates, optionally rewrites explanations with Gemini
+ * one event per request when GEMINI_API_KEY is set.
  */
 
 import { createHash } from "node:crypto";
-import { events, githubRepositories, jobRuns, tokens } from "@codexcap/db/schema";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { events, githubRepositories, jobRuns, projects, tokens } from "@codexcap/db/schema";
+import { and, asc, desc, eq, gte, inArray, isNotNull, notInArray } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { explainBuildSignalEvent } from "@/lib/explainBuildSignal";
+import { isGeminiConfigured } from "@/lib/geminiExplain";
 import { refreshGithubRepository } from "@/lib/github";
 import { refreshTokenMarket } from "@/lib/market";
 
@@ -18,12 +22,15 @@ interface StageCounts {
 }
 
 interface DailyUpkeepState extends Record<string, unknown> {
-  version: 2;
-  phase: "refreshing" | "finalizing" | "complete";
+  version: 3;
+  phase: "refreshing" | "finalizing" | "explaining" | "complete";
   repositoryIds: string[];
   tokenIds: string[];
   repositoryIndex: number;
   tokenIndex: number;
+  explainEventIds: string[];
+  explainIndex: number;
+  explanationsWritten: number;
   github: StageCounts;
   tokens: StageCounts & { skipped: number };
   errors: string[];
@@ -39,6 +46,8 @@ export interface DailyUpkeepProgress {
   githubTotal: number;
   tokenProcessed: number;
   tokenTotal: number;
+  explainProcessed: number;
+  explainTotal: number;
 }
 
 export interface DailyUpkeepResult {
@@ -53,6 +62,7 @@ export interface DailyUpkeepResult {
   tokens: StageCounts & { skipped: number };
   newEventsCreated: number;
   groupedBuildUpdatesCreated: number;
+  explanationsWritten: number;
   errors: string[];
 }
 
@@ -61,6 +71,17 @@ type JobRun = typeof jobRuns.$inferSelect;
 
 const RESUME_WINDOW_MS = 30 * 60 * 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EXPLAIN_EVENT_TYPES = [
+  "meaningful_commit",
+  "release",
+  "product_launch",
+  "liquidity_threshold",
+  "market_cap_threshold",
+  "token_migration",
+  "repo_private",
+  "dormant",
+] as const;
+const MAX_EXPLAIN_PER_JOB = 12;
 
 function shortError(scope: string, value: unknown): string {
   const message = value instanceof Error ? value.message : String(value);
@@ -98,10 +119,11 @@ function isStageCounts(value: unknown): value is StageCounts {
 }
 
 function parseState(metadata: Record<string, unknown> | null): DailyUpkeepState | null {
-  if (!metadata || metadata.version !== 2) return null;
+  if (!metadata || metadata.version !== 3) return null;
   if (
     metadata.phase !== "refreshing" &&
     metadata.phase !== "finalizing" &&
+    metadata.phase !== "explaining" &&
     metadata.phase !== "complete"
   ) {
     return null;
@@ -111,8 +133,12 @@ function parseState(metadata: Record<string, unknown> | null): DailyUpkeepState 
     !metadata.repositoryIds.every((value) => typeof value === "string") ||
     !Array.isArray(metadata.tokenIds) ||
     !metadata.tokenIds.every((value) => typeof value === "string") ||
+    !Array.isArray(metadata.explainEventIds) ||
+    !metadata.explainEventIds.every((value) => typeof value === "string") ||
     typeof metadata.repositoryIndex !== "number" ||
     typeof metadata.tokenIndex !== "number" ||
+    typeof metadata.explainIndex !== "number" ||
+    typeof metadata.explanationsWritten !== "number" ||
     !isStageCounts(metadata.github) ||
     !isStageCounts(metadata.tokens) ||
     typeof (metadata.tokens as unknown as Record<string, unknown>).skipped !== "number" ||
@@ -127,13 +153,17 @@ function parseState(metadata: Record<string, unknown> | null): DailyUpkeepState 
 }
 
 function progressFor(state: DailyUpkeepState): DailyUpkeepProgress {
+  const refreshProcessed = state.repositoryIndex + state.tokenIndex;
+  const refreshTotal = state.repositoryIds.length + state.tokenIds.length;
   return {
-    processed: state.repositoryIndex + state.tokenIndex,
-    total: state.repositoryIds.length + state.tokenIds.length,
+    processed: refreshProcessed + state.explainIndex,
+    total: refreshTotal + state.explainEventIds.length,
     githubProcessed: state.repositoryIndex,
     githubTotal: state.repositoryIds.length,
     tokenProcessed: state.tokenIndex,
     tokenTotal: state.tokenIds.length,
+    explainProcessed: state.explainIndex,
+    explainTotal: state.explainEventIds.length,
   };
 }
 
@@ -154,6 +184,7 @@ function resultFor(
     tokens: state.tokens,
     newEventsCreated: state.newEventsCreated,
     groupedBuildUpdatesCreated: state.groupedBuildUpdatesCreated,
+    explanationsWritten: state.explanationsWritten,
     errors: state.errors,
   };
 }
@@ -174,12 +205,15 @@ async function createRun(database: Database): Promise<{ run: JobRun; state: Dail
   const skipped = currentTokens.length - tokenIds.length;
   const startedAt = new Date();
   const state: DailyUpkeepState = {
-    version: 2,
+    version: 3,
     phase: "refreshing",
     repositoryIds: repositoryRows.map((repository) => repository.id),
     tokenIds,
     repositoryIndex: 0,
     tokenIndex: 0,
+    explainEventIds: [],
+    explainIndex: 0,
+    explanationsWritten: 0,
     github: { processed: 0, successful: 0, failed: 0 },
     tokens: { processed: 0, successful: 0, failed: 0, skipped },
     errors: [],
@@ -258,7 +292,7 @@ async function saveProgress(
   await database
     .update(jobRuns)
     .set({
-      recordsProcessed: state.repositoryIndex + state.tokenIndex,
+      recordsProcessed: state.repositoryIndex + state.tokenIndex + state.explainIndex,
       metadata: state,
     })
     .where(and(eq(jobRuns.id, runId), eq(jobRuns.status, "running")));
@@ -348,6 +382,82 @@ async function groupBuildUpdates(
   return created;
 }
 
+async function collectExplainCandidates(database: Database): Promise<string[]> {
+  if (!isGeminiConfigured()) return [];
+
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 30);
+  const activeProjects = await database
+    .select({ id: projects.id })
+    .from(projects)
+    .where(notInArray(projects.projectStatus, ["rejected", "archived"]));
+  if (activeProjects.length === 0) return [];
+
+  const rows = await database
+    .select({
+      id: events.id,
+      metadata: events.metadata,
+      eventType: events.eventType,
+      description: events.description,
+    })
+    .from(events)
+    .where(
+      and(
+        gte(events.timestamp, since),
+        inArray(events.eventType, [...EXPLAIN_EVENT_TYPES]),
+        isNotNull(events.sourceUrl),
+        inArray(
+          events.projectId,
+          activeProjects.map((project) => project.id),
+        ),
+      ),
+    )
+    .orderBy(desc(events.timestamp))
+    .limit(80);
+
+  const needsExplain = rows.filter((row) => {
+    if (row.eventType === "meaningful_commit") {
+      const score = row.metadata?.score;
+      if (typeof score !== "number" || score < 5) return false;
+    }
+    const ai = row.metadata?.aiExplanation;
+    if (!ai || typeof ai !== "object") return true;
+    return (ai as Record<string, unknown>).source !== "gemini";
+  });
+
+  return needsExplain.slice(0, MAX_EXPLAIN_PER_JOB).map((row) => row.id);
+}
+
+async function completeRun(
+  database: Database,
+  run: JobRun,
+  state: DailyUpkeepState,
+): Promise<DailyUpkeepResult> {
+  const total = state.repositoryIds.length + state.tokenIds.length;
+  const successful = state.github.successful + state.tokens.successful;
+  if (total === 0) addError(state, "Daily upkeep: no repositories or exact-contract tokens found");
+  const status: "succeeded" | "partial" | "failed" =
+    state.errors.length === 0 ? "succeeded" : successful > 0 ? "partial" : "failed";
+  const finishedAt = new Date();
+  state.phase = "complete";
+  state.heartbeatAt = finishedAt.toISOString();
+  const errorSummary =
+    state.errors.length > 0 ? state.errors.slice(0, 8).join(" | ").slice(0, 1_500) : null;
+
+  await database
+    .update(jobRuns)
+    .set({
+      status,
+      finishedAt,
+      error: errorSummary,
+      recordsProcessed: state.repositoryIndex + state.tokenIndex + state.explainIndex,
+      metadata: state,
+    })
+    .where(and(eq(jobRuns.id, run.id), eq(jobRuns.status, "running")));
+
+  return resultFor({ ...run, status, finishedAt }, state, status);
+}
+
 async function finalizeRun(
   database: Database,
   run: JobRun,
@@ -369,29 +479,54 @@ async function finalizeRun(
     addError(state, shortError("Event count", error));
   }
 
-  const total = state.repositoryIds.length + state.tokenIds.length;
-  const successful = state.github.successful + state.tokens.successful;
-  if (total === 0) addError(state, "Daily upkeep: no repositories or exact-contract tokens found");
-  const status: "succeeded" | "partial" | "failed" =
-    state.errors.length === 0 ? "succeeded" : successful > 0 ? "partial" : "failed";
-  const finishedAt = new Date();
-  state.phase = "complete";
-  state.heartbeatAt = finishedAt.toISOString();
-  const errorSummary =
-    state.errors.length > 0 ? state.errors.slice(0, 8).join(" | ").slice(0, 1_500) : null;
+  try {
+    state.explainEventIds = await collectExplainCandidates(database);
+    state.explainIndex = 0;
+  } catch (error) {
+    addError(state, shortError("Explain candidate collection", error));
+    state.explainEventIds = [];
+    state.explainIndex = 0;
+  }
 
-  await database
-    .update(jobRuns)
-    .set({
-      status,
-      finishedAt,
-      error: errorSummary,
-      recordsProcessed: state.repositoryIndex + state.tokenIndex,
-      metadata: state,
-    })
-    .where(and(eq(jobRuns.id, run.id), eq(jobRuns.status, "running")));
+  if (state.explainEventIds.length === 0) {
+    return completeRun(database, run, state);
+  }
 
-  return resultFor({ ...run, status, finishedAt }, state, status);
+  state.phase = "explaining";
+  await saveProgress(database, run.id, state);
+  return resultFor(run, state, "running");
+}
+
+async function explainStep(
+  database: Database,
+  run: JobRun,
+  state: DailyUpkeepState,
+): Promise<DailyUpkeepResult> {
+  const eventId = state.explainEventIds[state.explainIndex];
+  if (!eventId) return completeRun(database, run, state);
+
+  try {
+    const result = await explainBuildSignalEvent(eventId);
+    if (result.ok && result.source === "gemini" && !result.skipped) {
+      state.explanationsWritten += 1;
+    } else if (!result.ok && result.error && !result.skipped) {
+      addError(state, shortError(`Explain ${eventId.slice(0, 8)}`, result.error));
+    } else if (result.error === "GEMINI_API_KEY is not set") {
+      // No key mid-run — finish without more Gemini attempts.
+      state.explainIndex = state.explainEventIds.length;
+      return completeRun(database, run, state);
+    }
+  } catch (error) {
+    addError(state, shortError(`Explain ${eventId.slice(0, 8)}`, error));
+  }
+
+  state.explainIndex += 1;
+  if (state.explainIndex >= state.explainEventIds.length) {
+    return completeRun(database, run, state);
+  }
+
+  await saveProgress(database, run.id, state);
+  return resultFor(run, state, "running");
 }
 
 /** Process one bounded upkeep step. Call again with jobRunId until complete. */
@@ -413,6 +548,10 @@ export async function runDailyUpkeepStep(jobRunId?: string): Promise<DailyUpkeep
 
   if (state.phase === "finalizing") {
     return finalizeRun(database, run, state);
+  }
+
+  if (state.phase === "explaining") {
+    return explainStep(database, run, state);
   }
 
   const repositoryId = state.repositoryIds[state.repositoryIndex];

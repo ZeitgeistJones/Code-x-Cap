@@ -68,6 +68,9 @@ export function BuildSignalCard({ signal }: { signal: BuildSignal }) {
           <p className="text-xs text-ink-500">
             Build signal · {tokenLabel}
             {token?.chain ? ` · ${token.chain}` : ""}
+            {signal.copySource === "gemini"
+              ? " · Gemini rewrite from public evidence"
+              : " · template copy (add GEMINI_API_KEY + run upkeep for plain-English rewrite)"}
           </p>
           <Link
             href={`/projects/${signal.project.slug}`}

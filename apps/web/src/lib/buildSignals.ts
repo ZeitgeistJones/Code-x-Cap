@@ -73,6 +73,14 @@ export interface BuildSignalCopy {
   whatToWatchNext: string;
 }
 
+export type CachedAiExplanation = {
+  fingerprint: string;
+  model: string | null;
+  generatedAt: string;
+  source: "gemini";
+  copy: BuildSignalCopy;
+};
+
 /** Short plain-English meanings for the three labels shown on every card. */
 export const BUILD_EVIDENCE_EXPLAIN: Record<BuildEvidenceLabel, string> = {
   strong: "Clear recent public build work",
@@ -395,5 +403,75 @@ export function buildSignalCopy(input: BuildSignalCopyInput): BuildSignalCopy {
     tokenRelation: tokenRelationCopy(input),
     whatWeDoNotKnow,
     whatToWatchNext,
+  };
+}
+
+export function isBuildSignalCopy(value: unknown): value is BuildSignalCopy {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.whatHappened === "string" &&
+    row.whatHappened.trim().length > 0 &&
+    typeof row.whyItMayMatter === "string" &&
+    row.whyItMayMatter.trim().length > 0 &&
+    typeof row.tokenRelation === "string" &&
+    row.tokenRelation.trim().length > 0 &&
+    typeof row.whatWeDoNotKnow === "string" &&
+    row.whatWeDoNotKnow.trim().length > 0 &&
+    typeof row.whatToWatchNext === "string" &&
+    row.whatToWatchNext.trim().length > 0
+  );
+}
+
+export function explanationFingerprint(input: BuildSignalCopyInput): string {
+  const payload = [
+    input.projectName,
+    input.eventType,
+    input.eventTitle ?? "",
+    input.eventDescription ?? "",
+    input.classification ?? "",
+    String(input.meaningfulScore ?? ""),
+    String(input.commitCount ?? ""),
+    formatDate(input.happenedAt),
+    input.shortDescription ?? "",
+    input.trackingReason ?? "",
+    String(input.identityConfidence ?? ""),
+    input.identityLabel,
+    input.tokenSymbol ?? "",
+    input.tokenChain ?? "",
+    input.tokenContract ?? "",
+    input.tokenSourceUrl ?? "",
+    String(input.contractVerified),
+    input.marketLabel,
+    String(input.marketCap ?? ""),
+    String(input.liquidityUsd ?? ""),
+    input.marketSource ?? "",
+    formatDate(input.marketSnapshotAt),
+  ].join("|");
+  // Lightweight stable digest without importing crypto into client bundles.
+  let hash = 0;
+  for (let i = 0; i < payload.length; i += 1) {
+    hash = (hash * 31 + payload.charCodeAt(i)) >>> 0;
+  }
+  return `v1-${hash.toString(16)}`;
+}
+
+export function readCachedAiExplanation(
+  metadata: Record<string, unknown> | null | undefined,
+  expectedFingerprint: string,
+): CachedAiExplanation | null {
+  const raw = metadata?.aiExplanation;
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  if (row.source !== "gemini") return null;
+  if (typeof row.fingerprint !== "string" || row.fingerprint !== expectedFingerprint) return null;
+  if (typeof row.generatedAt !== "string") return null;
+  if (!isBuildSignalCopy(row.copy)) return null;
+  return {
+    fingerprint: row.fingerprint,
+    model: typeof row.model === "string" ? row.model : null,
+    generatedAt: row.generatedAt,
+    source: "gemini",
+    copy: row.copy,
   };
 }

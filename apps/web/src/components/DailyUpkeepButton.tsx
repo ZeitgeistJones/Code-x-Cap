@@ -7,7 +7,7 @@ interface DailyUpkeepResponse {
   complete?: boolean;
   error?: string;
   jobRunId?: string;
-  phase?: "refreshing" | "finalizing" | "complete";
+  phase?: "refreshing" | "finalizing" | "explaining" | "complete";
   status?: string;
   progress?: {
     processed: number;
@@ -16,11 +16,14 @@ interface DailyUpkeepResponse {
     githubTotal: number;
     tokenProcessed: number;
     tokenTotal: number;
+    explainProcessed?: number;
+    explainTotal?: number;
   };
   github?: { processed: number; successful: number; failed: number };
   tokens?: { processed: number; successful: number; skipped: number; failed: number };
   newEventsCreated?: number;
   groupedBuildUpdatesCreated?: number;
+  explanationsWritten?: number;
   errors?: string[];
 }
 
@@ -85,6 +88,7 @@ export function DailyUpkeepButton() {
               `${result.tokens?.skipped ?? 0} skipped, ${result.tokens?.failed ?? 0} failed\n` +
               `New events: ${result.newEventsCreated ?? 0}\n` +
               `Build updates: ${result.groupedBuildUpdatesCreated ?? 0}\n` +
+              `Gemini explanations: ${result.explanationsWritten ?? 0}\n` +
               `Job: ${result.jobRunId}` +
               errors,
           );
@@ -96,9 +100,11 @@ export function DailyUpkeepButton() {
         setProgressText(
           result.phase === "finalizing"
             ? "Finalizing upkeep…"
-            : progress
-              ? `Upkeep ${progress.processed}/${progress.total}…`
-              : "Running upkeep…",
+            : result.phase === "explaining"
+              ? `Writing plain-English notes ${progress?.explainProcessed ?? 0}/${progress?.explainTotal ?? 0}…`
+              : progress
+                ? `Upkeep ${progress.processed}/${progress.total}…`
+                : "Running upkeep…",
         );
         await new Promise((resolve) => setTimeout(resolve, 150));
       }

@@ -15,7 +15,9 @@ The route:
 3. Refreshes at most one GitHub repository and one token concurrently per request.
 4. Saves cursors, cumulative counts, errors, and a heartbeat after every request.
 5. Groups same-project meaningful commits found during the run into one sourced `Build update`.
-6. Updates the job run with final status, timestamps, counts, and short error summaries.
+6. If `GEMINI_API_KEY` is set, rewrites plain-English Build Signal explanations one event per
+   request (cached on the event). Gemini may only use the provided public facts.
+7. Updates the job run with final status, timestamps, counts, and short error summaries.
 
 The short requests avoid Vercel's per-function time limit. One repository or token failure does not
 abort the rest of the job. A run with partial failures is stored as `partial`; a fully successful
@@ -111,7 +113,23 @@ Meaningful commits need a first-pass score of at least 5. Rejected and archived 
 excluded. Only the current token is attached, and market context comes from the latest snapshot for
 that exact token record.
 
-All labels and explanations are deterministic code templates. No LLM is used.
+All labels start from deterministic code. When `GEMINI_API_KEY` is configured, daily upkeep can
+rewrite the five plain-English sections with Gemini from the same public facts. Cached Gemini copy
+is stored on `events.metadata.aiExplanation` and reused until the evidence fingerprint changes.
+If Gemini is unset or fails, the deterministic template remains.
+
+## Gemini setup
+
+1. In Vercel → Project → Settings → Environment Variables, add:
+   - `GEMINI_API_KEY` = your Google AI Studio / Gemini API key
+   - optional `GEMINI_MODEL` = `gemini-2.0-flash` (default) or another Gemini model id
+2. Redeploy so the function can read the new variable.
+3. Unlock the app and click **Run daily upkeep**. After GitHub/market refresh, the button will show
+   `Writing plain-English notes…` while Gemini rewrites missing signal cards.
+4. Open the home feed. Cards that used Gemini say **Gemini rewrite from public evidence**.
+
+Gemini is instructed not to invent token links, users, revenue, or price calls. If the public facts
+do not prove a code↔token relationship, the rewrite must say unknown / not verified.
 
 ## Known limitations
 
@@ -128,5 +146,5 @@ All labels and explanations are deterministic code templates. No LLM is used.
 - Current refresh paths mainly emit `meaningful_commit` and `repo_private`. Release, product,
   market-threshold, migration, and dormant events are feed-ready but are not broadly auto-generated
   in this V1.
-- V1 does not configure cron, webhooks, a GitHub App, alerts, user accounts, token gating, an LLM,
-  or a public score.
+- V1 does not configure cron, webhooks, a GitHub App, alerts, user accounts, or token gating.
+- Gemini explanations are optional and cached. Without `GEMINI_API_KEY`, the feed keeps template copy.

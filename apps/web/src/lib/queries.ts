@@ -31,6 +31,8 @@ import {
   classifyBuildEvidence,
   classifyIdentity,
   classifyMarketContext,
+  explanationFingerprint,
+  readCachedAiExplanation,
   type BuildEvidenceLabel,
   type BuildSignalEventType,
   type IdentityLabel,
@@ -527,6 +529,34 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
       const marketCap = snapshot?.marketCap != null ? Number(snapshot.marketCap) : null;
       const liquidityUsd = snapshot?.liquidityUsd != null ? Number(snapshot.liquidityUsd) : null;
 
+      const copyInput = {
+        projectName: project.name,
+        eventType,
+        eventTitle: event.title,
+        eventDescription: event.description,
+        classification,
+        meaningfulScore: score,
+        commitCount,
+        happenedAt: event.timestamp,
+        shortDescription: project.shortDescription,
+        trackingReason: project.trackingReason,
+        identityConfidence: project.identityConfidence,
+        identityLabel: identity,
+        tokenSymbol: currentToken?.symbol ?? null,
+        tokenChain: currentToken?.chain ?? null,
+        tokenContract: currentToken?.contractAddress ?? null,
+        tokenSourceUrl: currentToken?.sourceUrl ?? null,
+        contractVerified: currentToken?.contractVerified ?? false,
+        marketLabel: market,
+        marketCap: Number.isFinite(marketCap) ? marketCap : null,
+        liquidityUsd: Number.isFinite(liquidityUsd) ? liquidityUsd : null,
+        marketSource: snapshot?.source ?? null,
+        marketSnapshotAt: snapshot?.timestamp ?? null,
+      };
+      const fingerprint = explanationFingerprint(copyInput);
+      const cached = readCachedAiExplanation(event.metadata, fingerprint);
+      const copy = cached?.copy ?? buildSignalCopy(copyInput);
+
       return {
         id: event.id,
         project: {
@@ -550,30 +580,9 @@ export async function getRecentBuildSignals(filters: RecentBuildSignalFilters) {
         currentToken,
         marketSnapshot: snapshot,
         labels: { buildEvidence, identity, market },
-        copy: buildSignalCopy({
-          projectName: project.name,
-          eventType,
-          eventTitle: event.title,
-          eventDescription: event.description,
-          classification,
-          meaningfulScore: score,
-          commitCount,
-          happenedAt: event.timestamp,
-          shortDescription: project.shortDescription,
-          trackingReason: project.trackingReason,
-          identityConfidence: project.identityConfidence,
-          identityLabel: identity,
-          tokenSymbol: currentToken?.symbol ?? null,
-          tokenChain: currentToken?.chain ?? null,
-          tokenContract: currentToken?.contractAddress ?? null,
-          tokenSourceUrl: currentToken?.sourceUrl ?? null,
-          contractVerified: currentToken?.contractVerified ?? false,
-          marketLabel: market,
-          marketCap: Number.isFinite(marketCap) ? marketCap : null,
-          liquidityUsd: Number.isFinite(liquidityUsd) ? liquidityUsd : null,
-          marketSource: snapshot?.source ?? null,
-          marketSnapshotAt: snapshot?.timestamp ?? null,
-        }),
+        copy,
+        copySource: cached ? ("gemini" as const) : ("template" as const),
+        copyModel: cached?.model ?? null,
       };
     })
     .filter((signal) => {
